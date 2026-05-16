@@ -38,10 +38,23 @@ export interface DbSession {
   sourceFileName: string
 }
 
+export interface DbEvent {
+  id: string
+  sessionId: string
+  date: string
+  type: string
+  title: string
+  description: string
+  severity: 'low' | 'medium' | 'high'
+  isAuto: boolean
+  createdAt: number
+}
+
 export class ChatMindDB extends Dexie {
   messages!: Table<DbMessage>
   participants!: Table<DbParticipant>
   sessions!: Table<DbSession>
+  events!: Table<DbEvent>
 
   constructor() {
     super('ChatMindDB')
@@ -49,6 +62,9 @@ export class ChatMindDB extends Dexie {
       messages: 'id, [sessionId+timestamp], senderId, timestamp, emotion',
       participants: 'id, [sessionId+names], role',
       sessions: 'id, importedAt',
+    })
+    this.version(2).stores({
+      events: 'id, [sessionId+date], date',
     })
   }
 }

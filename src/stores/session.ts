@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { db } from '../db/schema'
-import type { DbMessage, DbParticipant, DbSession } from '../db/schema'
+import type { DbMessage, DbParticipant, DbSession, DbEvent } from '../db/schema'
 import type { EmotionLabel } from '../types/message'
 
 export const useSessionStore = defineStore('session', () => {
@@ -122,6 +122,24 @@ export const useSessionStore = defineStore('session', () => {
     return db.participants.where('sessionId').equals(sessionId).toArray()
   }
 
+  async function getEvents(sessionId: string) {
+    return db.events.where('sessionId').equals(sessionId).sortBy('date')
+  }
+
+  async function addEvent(event: Omit<DbEvent, 'id' | 'createdAt'>) {
+    const newEvent: DbEvent = {
+      ...event,
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+    }
+    await db.events.put(newEvent)
+    return newEvent
+  }
+
+  async function deleteEvent(eventId: string) {
+    await db.events.delete(eventId)
+  }
+
   function setCurrentSession(id: string) {
     currentSessionId.value = id
   }
@@ -143,6 +161,9 @@ export const useSessionStore = defineStore('session', () => {
     updateMessageIdentity,
     batchUpdateIdentityBySender,
     getParticipants,
+    getEvents,
+    addEvent,
+    deleteEvent,
     setCurrentSession,
   }
 })

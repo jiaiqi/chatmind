@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NTimeline, NTimelineItem, NTag, NEmpty,
   NSpace, NButton, useMessage, NPopover,
+  NModal, NForm, NFormItem, NInput, NDatePicker,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -39,6 +40,13 @@ const selectedDate = ref<string | null>(null)
 const selectedMessages = ref<DbMessage[]>([])
 const correctingMsgId = ref<string | null>(null)
 const events = ref<ChatEvent[]>([])
+const showAddEventModal = ref(false)
+const newEventForm = ref({
+  title: '',
+  description: '',
+  date: null as string | null,
+  severity: 'medium' as 'low' | 'medium' | 'high',
+})
 
 const emotionColors: Record<EmotionLabel, string> = {
   positive: '#18a058',
@@ -104,7 +112,27 @@ async function loadData() {
   try {
     messages.value = await sessionStore.getMessagesByTimeRange(sessionId, 0, Date.now())
     emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
-    events.value = detectAutoEvents(messages.value)
+    const autoEvents = detectAutoEvents(messages.value)
+    const dbEvents = await sessionStore.getEvents(sessionId)
+    const mappedUserEvents: ChatEvent[] = dbEvents.map(e => ({
+      date: e.date,
+      type: e.type as ChatEvent['type'],
+      title: e.title,
+      description: e.description,
+      severity: e.severity,
+      isAuto: e.isAuto,
+    }))
+    // 合并并按日期排序
+    const merged = [...autoEvents, ...mappedUserEvents]
+    const seen = new Set<string>()
+    events.value = merged
+      .filter(e => {
+        const key = `${e.date}-${e.type}-${e.title}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .sort((a, b) => a.date.localeCompare(b.date))
   } catch (err) {
     message.error('加载数据失败')
   }
@@ -223,6 +251,47 @@ function handleEventClick(eventDate: string) {
     m => m.timestamp >= start && m.timestamp < end,
   )
 }
+
+async function handleAddEvent() {
+  const sessionId = sessionStore.currentSessionId
+  if (!sessionId || !newEventForm.value.date || !newEventForm.value.title.trim()) {
+    message.error('请填写标题和日期')
+    return
+  }
+  try {
+    await sessionStore.addEvent({
+      sessionId,
+      date: newEventForm.value.date,
+      type: 'milestone',
+      title: newEventForm.value.title.trim(),
+      description: newEventForm.value.description.trim(),
+      severity: newEventForm.value.severity,
+      isAuto: false,
+    })
+    message.success('里程碑已添加')
+    showAddEventModal.value = false
+    newEventForm.value = { title: '', description: '', date: null, severity: 'medium' }
+    await loadData()
+  } catch {
+    message.error('添加失败')
+  }
+}
+
+async function handleDeleteUserEvent(date: string, title: string) {
+  const sessionId = sessionStore.currentSessionId
+  if (!sessionId) return
+  try {
+    const dbEvents = await sessionStore.getEvents(sessionId)
+    const target = dbEvents.find(e => e.date === date && e.title === title && !e.isAuto)
+    if (target) {
+      await sessionStore.deleteEvent(target.id)
+      message.success('已删除')
+      await loadData()
+    }
+  } catch {
+    message.error('删除失败')
+  }
+}
 </script>
 
 <template>
@@ -240,11 +309,17 @@ function handleEventClick(eventDate: string) {
     </n-card>
 
     <!-- 事件标记 -->
-    <n-card v-if="events.length > 0" title="关键事件" class="events-card">
-      <n-space vertical size="small">
+    <n-card title="关键事件" class="events-card">
+      <template #header-extra>
+        <n-button text size="small" @click="showAddEventModal = true">
+          + 添加里程碑
+        </n-button>
+      </template>
+
+      <n-space v-if="events.length > 0" vertical size="small">
         <div
           v-for="evt in events"
-          :key="`${evt.date}-${evt.type}`"
+          :key="`${evt.date}-${evt.type}-${evt.title}`"
           class="event-item"
           @click="handleEventClick(evt.date)"
         >
@@ -254,9 +329,21 @@ function handleEventClick(eventDate: string) {
           <span class="event-date">{{ evt.date }}</span>
           <span class="event-title">{{ evt.title }}</span>
           <span class="event-desc">{{ evt.description }}</span>
-          <n-button text size="tiny" type="primary" style="margin-left: auto">查看</n-button>
+          <n-space style="margin-left: auto" size="small">
+            <n-button text size="tiny" type="primary">查看</n-button>
+            <n-button
+              v-if="!evt.isAuto"
+              text
+              size="tiny"
+              type="error"
+              @click.stop="handleDeleteUserEvent(evt.date, evt.title)"
+            >
+              删除
+            </n-button>
+          </n-space>
         </div>
       </n-space>
+      <n-empty v-else description="暂无事件，点击右上角添加里程碑" />
     </n-card>
 
     <n-card v-if="selectedDate" :title="`${selectedDate} 的聊天记录`" class="detail-card">
@@ -317,6 +404,40 @@ function handleEventClick(eventDate: string) {
 
       <n-empty v-else description="当天暂无消息" />
     </n-card>
+
+    <!-- 添加里程碑弹窗 -->
+    <n-modal v-model:show="showAddEventModal" title="添加里程碑" preset="card" style="width: 420px; max-width: 90vw">
+      <n-form label-placement="left" label-width="60">
+        <n-form-item label="标题" required>
+          <n-input v-model:value="newEventForm.title" placeholder="如：第一次约会、吵架和好..." />
+        </n-form-item>
+        <n-form-item label="日期" required>
+          <n-date-picker v-model:formatted-value="newEventForm.date" value-format="yyyy-MM-dd" type="date" style="width: 100%" />
+        </n-form-item>
+        <n-form-item label="严重程度">
+          <n-space>
+            <n-tag
+              v-for="s in ['low', 'medium', 'high']"
+              :key="s"
+              :type="newEventForm.severity === s ? getEventTagType(s) : 'default'"
+              style="cursor: pointer"
+              @click="newEventForm.severity = s as any"
+            >
+              {{ s === 'low' ? '普通' : s === 'medium' ? '重要' : '重大' }}
+            </n-tag>
+          </n-space>
+        </n-form-item>
+        <n-form-item label="描述">
+          <n-input v-model:value="newEventForm.description" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="可选：补充细节..." />
+        </n-form-item>
+      </n-form>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showAddEventModal = false">取消</n-button>
+          <n-button type="primary" @click="handleAddEvent">添加</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
