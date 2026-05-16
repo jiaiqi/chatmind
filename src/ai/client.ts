@@ -154,20 +154,7 @@ export class AiClient {
       temperature: 0.7,
     }
 
-    // MiniMax 特殊处理：使用 messages 格式稍有不同
-    if (this.config.provider === 'minimax') {
-      // MiniMax 支持标准格式，不需要特殊转换
-    }
-
-    // 百炼特殊处理：支持标准 OpenAI 格式
-    if (this.config.provider === 'bailian') {
-      // 百炼的 compatible-mode 完全兼容 OpenAI
-    }
-
-    // 智谱特殊处理
-    if (this.config.provider === 'zhipu') {
-      // 智谱也兼容 OpenAI 格式
-    }
+    // MiniMax、百炼、智谱均完全兼容 OpenAI 标准格式，无需特殊转换
 
     return body
   }

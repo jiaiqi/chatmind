@@ -64,18 +64,17 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
     id: 'minimax',
     name: 'MiniMax',
-    baseUrl: 'https://api.minimax.chat/v1',
+    baseUrl: 'https://api.minimaxi.com/v1',
     apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
-    docsUrl: 'https://platform.minimaxi.com/document/ChatCompletion',
+    docsUrl: 'https://platform.minimaxi.com/docs/token-plan/intro',
     isOpenAICompatible: true,
-    extraHeaders: {
-      'Authorization': 'Bearer {apiKey}',
-    },
     models: [
-      { id: 'abab6.5s-chat', name: 'abab6.5s', description: '轻量快速' },
-      { id: 'abab6.5-chat', name: 'abab6.5', description: '标准模型' },
-      { id: 'abab6.5t-chat', name: 'abab6.5t', description: '超长上下文' },
+      { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1', description: 'Token Plan 主力模型，Agent 能力最强' },
+      { id: 'MiniMax-Text-01', name: 'MiniMax-Text-01', description: '长文本模型，支持 400K 上下文' },
       { id: 'abab7-chat-preview', name: 'abab7 Preview', description: '最新预览版' },
+      { id: 'abab6.5t-chat', name: 'abab6.5t', description: '超长上下文' },
+      { id: 'abab6.5-chat', name: 'abab6.5', description: '标准模型' },
+      { id: 'abab6.5s-chat', name: 'abab6.5s', description: '轻量快速' },
     ],
   },
   {
