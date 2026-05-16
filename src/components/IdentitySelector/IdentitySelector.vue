@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { NModal, NRadio, NRadioGroup, NButton, NSpace, NInput, NTag, NText, useMessage } from 'naive-ui'
-import { useIdentityStore } from '../../stores/identity'
 import { useImportStore } from '../../stores/import'
 
 const props = defineProps<{
@@ -13,7 +12,6 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const identityStore = useIdentityStore()
 const importStore = useImportStore()
 const message = useMessage()
 

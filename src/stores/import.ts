@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ParseResult, RawMessage, RawParticipant } from '../types/message'
+import type { ParseResult, RawParticipant } from '../types/message'
 
 export interface ImportState {
   files: File[]

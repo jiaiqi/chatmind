@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useMessage } from 'naive-ui'
 import ChatImport from '../components/ChatImport/ChatImport.vue'
 import IdentitySelector from '../components/IdentitySelector/IdentitySelector.vue'
 import { useImportStore } from '../stores/import'
 
 const importStore = useImportStore()
-const message = useMessage()
 
 const showIdentitySelector = ref(false)
 const chatImportRef = ref<InstanceType<typeof ChatImport> | null>(null)

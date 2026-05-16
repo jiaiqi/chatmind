@@ -18,7 +18,6 @@ export async function parseGenericTxt(text: string, fileName: string): Promise<P
   ]
 
   let currentMessage: Partial<RawMessage> | null = null
-  let patternIndex = -1
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -61,7 +60,6 @@ export async function parseGenericTxt(text: string, fileName: string): Promise<P
           senderName,
           content,
         }
-        patternIndex = pi
         matched = true
         break
       }

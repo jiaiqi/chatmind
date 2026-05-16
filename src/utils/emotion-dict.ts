@@ -44,7 +44,6 @@ const INDIFFERENT_WORDS = [
 ]
 
 export function ruleBasedEmotion(text: string): { label: EmotionLabel; score: number } | null {
-  let score = 0
   let matched = false
   let matchedLabel: EmotionLabel = 'neutral'
   let maxWeight = 0

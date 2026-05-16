@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NGrid, NGridItem, NStatistic, NDivider,
-  NButton, NSpace, NEmpty, useMessage,
+  NButton, NEmpty, useMessage,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -15,7 +15,7 @@ import {
 import { useSessionStore } from '../stores/session'
 import { calculateStatistics, formatDuration } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
-import { formatDate, formatDateTime } from '../utils/date'
+import { formatDate } from '../utils/date'
 import type { StatisticsResult } from '../types/analysis'
 import type { DbMessage } from '../db/schema'
 

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { db } from '../db/schema'
 import type { DbMessage, DbParticipant, DbSession } from '../db/schema'
-import type { EmotionLabel, MessageType } from '../types/message'
+import type { EmotionLabel } from '../types/message'
 
 export const useSessionStore = defineStore('session', () => {
   const sessions = ref<DbSession[]>([])

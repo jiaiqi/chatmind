@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Alias, IdentityGraph, Participant } from '../types/identity'
-import type { RawParticipant, RawMessage } from '../types/message'
+import type { Alias } from '../types/identity'
+import type { RawMessage } from '../types/message'
 
 export const useIdentityStore = defineStore('identity', () => {
   // 用户确认的身份映射

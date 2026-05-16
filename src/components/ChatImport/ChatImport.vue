@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NUpload, NUploadDragger, NText, NButton, NIcon, NSpace, useMessage } from 'naive-ui'
+import { NUpload, NUploadDragger, NText, NIcon, useMessage } from 'naive-ui'
 import { ArchiveOutline as ArchiveIcon } from '@vicons/ionicons5'
 import { useImportStore } from '../../stores/import'
 import { useIdentityStore } from '../../stores/identity'
@@ -111,7 +111,7 @@ async function confirmAndImport(selectedSelf: string, aliases: string[]) {
         if (m.timestamp < minTime) minTime = m.timestamp
         if (m.timestamp > maxTime) maxTime = m.timestamp
 
-        return {
+        const msg: any = {
           id: `${sessionId}-m${idx}`,
           sessionId,
           senderId,
@@ -121,6 +121,7 @@ async function confirmAndImport(selectedSelf: string, aliases: string[]) {
           type: m.type,
           wordCount: m.content.length,
         }
+        return msg
       })
 
       // 情绪分析

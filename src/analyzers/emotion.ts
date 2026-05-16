@@ -1,6 +1,5 @@
 import type { DbMessage } from '../db/schema'
 import type { EmotionTrendPoint } from '../types/analysis'
-import { getDayKey } from '../utils/date'
 import { ruleBasedEmotion } from '../utils/emotion-dict'
 
 export function analyzeMessageEmotion(content: string) {
