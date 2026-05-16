@@ -1,7 +1,7 @@
 # ChatMind - AI 分析与 Prompt 设计
 
-> 版本: v0.1  
-> 日期: 2026-05-15
+> 版本: v0.2  
+> 日期: 2026-05-16
 
 ---
 
@@ -42,58 +42,21 @@
 
 ---
 
-## 二、Prompt 设计
+## 二、Prompt 构建方式
 
-### 2.1 批量情绪分析 Prompt
+所有 Prompt 均内联构建于 `src/stores/ai.ts` 的 `buildSystemPrompt()` 函数中，而非拆分为独立文件。原因：
+- Prompt 高度依赖运行时数据（统计摘要、情绪趋势、会话信息）
+- 无需复用，一个系统 Prompt 覆盖全部 AI 对话场景
 
-```typescript
-// src/ai/prompts/emotion-analysis.ts
-
-export const batchEmotionPrompt = `你是一位精通中文情感分析的专家。请分析以下聊天记录中每条消息的情绪倾向。
-
-## 分析维度
-每条消息的情绪标签必须是以下之一：
-- positive: 正面、开心、满意、感激、兴奋
-- negative: 负面、不满、抱怨、失望、焦虑
-- neutral: 中性、客观陈述、日常问候
-- angry: 愤怒、生气、责骂、威胁
-- sad: 悲伤、难过、委屈、失落
-- affectionate: 亲昵、关心、暧昧、示爱
-- indifferent: 敷衍、冷淡、应付、简短回应
-
-## 输出格式
-返回 JSON 数组，每条记录包含：
-{
-  "index": number,        // 消息序号
-  "label": string,        // 情绪标签
-  "score": number,        // 置信度 0.0-1.0
-  "keywords": string[]    // 触发该情绪的关键词（1-3个）
-}
-
-## 特殊规则
-1. "嗯""哦""好的""知道了"等简短回应通常标记为 indifferent
-2. "哈哈""嘿嘿"通常标记为 positive
-3. 反问句（"你是不是有病？"）根据语境可能是 angry 或 negative
-4. 带有 emoji 的消息，emoji 含义优先于文字
-5. 如果一条消息同时包含正面和负面情绪，取主导情绪
-
-## 聊天记录
-{{messages}}
-
-请只返回 JSON 数组，不要其他解释。`;
-
-// messages 占位符填充：
-// messages = chatMessages.map((m, i) => 
-//   `${i}. [${m.isSelf ? '我' : '对方'}] ${m.content}`
-// ).join('\n');
-```
-
-### 2.2 关系洞察报告 Prompt
+### 2.1 系统 Prompt 结构
 
 ```typescript
-// src/ai/prompts/relationship-report.ts
+// src/stores/ai.ts - buildSystemPrompt()
 
-export const relationshipReportPrompt = `你是一位专业的情感关系分析师。请根据以下聊天记录的统计数据，生成一份关系分析报告。
+function buildSystemPrompt(stats: string, emotionTrend: string): string {
+  const toolsDescription = buildToolsPrompt();  // 动态注入工具定义
+
+  return `你是一位专业的关系分析师，正在帮助用户分析他们的聊天记录。
 
 ## 分析原则
 1. 客观中立：基于数据说话，不臆测
@@ -101,321 +64,232 @@ export const relationshipReportPrompt = `你是一位专业的情感关系分析
 3. 具体引用：引用具体的数据支撑你的观点
 4. 平衡视角：同时分析双方的互动模式
 
-## 输入数据
+## 当前会话信息
+- 时间范围：{{timeRange}}
+- 消息总数：{{messageCount}}
 
-### 基础统计
-{{statistics}}
+## 统计数据摘要
+{{stats}}
 
-### 情绪趋势摘要
-{{emotionSummary}}
+## 情绪趋势摘要
+{{emotionTrend}}
 
-### 关键对话样本（情绪极值点）
-{{keyMessages}}
+${toolsDescription}
 
-## 输出格式（JSON）
-{
-  "overview": {
-    "relationshipStage": string,    // 关系阶段: 蜜月期/稳定期/倦怠期/危机期/修复期
-    "intimacyScore": number,        // 亲密度评分 0-100
-    "balanceScore": number          // 互动平衡度 0-100
-  },
-  "insights": [
-    {
-      "type": "positive" | "concern" | "neutral",
-      "title": string,              // 洞察标题
-      "description": string,        // 详细说明
-      "evidence": string            // 数据证据
-    }
-  ],
-  "dangerSignals": [
-    {
-      "signal": string,             // 信号描述
-      "severity": "low" | "medium" | "high",
-      "suggestion": string          // 建议
-    }
-  ],
-  "recommendations": [
-    {
-      "area": string,               // 改善领域
-      "action": string,             // 具体行动建议
-      "priority": number            // 优先级 1-5
-    }
-  ]
+## 可溯源规范
+当你引用聊天记录中的具体日期时，请使用 [MSG:YYYY-MM-DD] 格式标注，
+例如："3月15日你们的交流出现了明显的负面情绪 [MSG:2024-03-15]"。
+
+请用中文回答。`;
+}
+```
+
+### 2.2 工具定义注入
+
+```typescript
+// src/ai/tools/definitions.ts - buildToolsPrompt()
+
+export function buildToolsPrompt(): string {
+  return `## 可用工具
+
+你可以使用以下工具来获取数据。当你需要查询数据时，在回复中插入工具调用标记：
+
+[TOOL_CALL: {"name": "工具名", "parameters": {参数对象}}]
+
+可用工具列表：
+
+1. query_messages
+   描述：查询指定时间范围内的聊天记录
+   参数：{ startDate: "YYYY-MM-DD", endDate: "YYYY-MM-DD", limit?: number }
+
+2. query_emotion_trend
+   描述：查询情绪趋势数据
+   参数：{ period?: "7d" | "30d" | "90d" }
+
+3. query_statistics
+   描述：查询统计指标
+   参数：{ metric?: string }
+
+4. search_keywords
+   描述：搜索关键词在聊天记录中的出现情况
+   参数：{ keyword: string, limit?: number }
+
+使用规则：
+- 如需查询数据，先输出工具调用标记，系统会自动执行并返回结果
+- 可以一次调用多个工具
+- 收到工具结果后，基于真实数据生成最终回答`;
+}
+```
+
+### 2.3 AI 回答可溯源设计
+
+**核心机制**：系统 Prompt 引导 AI 使用 `[MSG:YYYY-MM-DD]` 格式标注引用的日期。
+
+**前端解析**（`src/views/AiChatView.vue`）：
+```typescript
+function formatMessageContent(content: string): string {
+  return content
+    .replace(/\[MSG:(\d{4}-\d{2}-\d{2})\]/g,
+      '<a class="msg-trace-link" href="#" data-date="$1">📎 查看 $1 记录</a>')
+    .replace(/\n/g, '<br>');
+}
+```
+
+用户点击链接后，通过 `useSessionStore` 加载该日期消息并弹出 Modal 展示时间轴。
+
+### 2.4 文本标记式 Function Calling
+
+**为何不用标准 OpenAI tools 参数？**
+国产模型提供商对 `tools` 参数的支持参差不齐。采用纯文本 `[TOOL_CALL: {...}]` 标记，可兼容所有 OpenAI 兼容接口。
+
+**执行流程**（`src/stores/ai.ts`）：
+```
+用户提问
+  → 第一轮 AI 调用 → AI 回复（可能含 [TOOL_CALL: {...}]）
+  → 前端检测工具调用 → 显示"正在查询相关数据..."
+  → ToolExecutor 执行工具（自动脱敏）
+  → 第二轮 AI 调用（携带工具结果）→ 生成最终回答
+```
+
+**关键代码**（`src/ai/tools/executor.ts`）：
+```typescript
+export function parseToolCalls(text: string): Array<{ name: string; parameters: any }> {
+  const calls: Array<{ name: string; parameters: any }> = [];
+  const regex = /\[TOOL_CALL:\s*(\{[\s\S]*?\})\]/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    try { calls.push(JSON.parse(match[1])); } catch {}
+  }
+  return calls;
 }
 
-注意：
-- 如果没有明显的危险信号，dangerSignals 可以为空数组
-- insights 控制在 3-5 条
-- 用中文输出`;
-```
-
-### 2.3 AI 对话问答 Prompt
-
-```typescript
-// src/ai/prompts/chat-qa.ts
-
-export const chatQaSystemPrompt = `你是 ChatMind 的 AI 分析师，专门帮助用户分析他们的聊天记录。你具有以下能力：
-
-1. 你可以查询聊天记录、统计数据、情绪趋势
-2. 你基于客观数据给出分析，不凭空臆测
-3. 你理解人际关系中的微妙之处
-4. 你的回答应该：
-   - 先给出直接答案
-   - 然后用数据支撑
-   - 最后给出建设性建议
-   - 引用具体消息时，只引用脱敏后的内容
-
-可用工具：
-- query_messages: 查询指定时间范围的聊天记录
-- query_emotion_trend: 查询情绪趋势
-- query_statistics: 查询统计指标
-- search_keywords: 搜索关键词
-
-当前分析的会话：{{sessionName}}
-时间范围：{{timeRange}}
-消息总数：{{messageCount}}
-
-请用中文回答用户的问题。`;
-```
-
-### 2.4 关系阶段判定 Prompt
-
-```typescript
-// src/ai/prompts/relationship-stage.ts
-
-export const relationshipStagePrompt = `根据以下聊天统计数据，判断这段关系当前所处的阶段。
-
-## 阶段定义
-1. 蜜月期：高频互动、双方情绪积极、回复迅速、消息长度较长
-2. 稳定期：规律互动、情绪平稳、有来有往、 comfortable
-3. 倦怠期：互动减少、回复变慢、简短回应增多、情绪平淡
-4. 危机期：负面情绪激增、争吵频繁、冷暴力（长时间不回）、出现威胁性词汇
-5. 修复期：曾经危机但近期有改善迹象、主动沟通增多
-
-## 输入数据
-{{statistics}}
-
-## 输出
-{
-  "stage": "蜜月期" | "稳定期" | "倦怠期" | "危机期" | "修复期",
-  "confidence": number,           // 置信度 0-1
-  "reasoning": string,            // 判断依据（2-3句话）
-  "keyIndicators": [              // 关键指标
-    { "indicator": string, "value": string, "impact": "positive" | "negative" }
-  ]
-}`;
+export function stripToolCalls(text: string): string {
+  return text.replace(/\[TOOL_CALL:[\s\S]*?\]\s*/g, '');
+}
 ```
 
 ---
 
-## 三、Function Calling 工具详细设计
+## 三、Function Calling 工具实现
 
 ### 3.1 工具清单
 
 ```typescript
 // src/ai/tools/definitions.ts
 
-export const toolDefinitions = [
+export interface ToolDefinition {
+  name: string
+  description: string
+  parameters: Record<string, any>
+}
+
+export const tools: ToolDefinition[] = [
   {
     name: 'query_messages',
-    description: '查询指定时间范围内的聊天记录，可筛选发送者、关键词',
+    description: '查询指定时间范围内的聊天记录',
     parameters: {
-      type: 'object',
-      properties: {
-        startDate: {
-          type: 'string',
-          description: '开始日期，ISO 8601 格式，如 2024-01-01',
-        },
-        endDate: {
-          type: 'string',
-          description: '结束日期，ISO 8601 格式，如 2024-12-31',
-        },
-        sender: {
-          type: 'string',
-          enum: ['self', 'other', 'any'],
-          default: 'any',
-          description: '发送者筛选',
-        },
-        keyword: {
-          type: 'string',
-          description: '关键词筛选，支持模糊匹配',
-        },
-        emotion: {
-          type: 'string',
-          enum: ['positive', 'negative', 'neutral', 'angry', 'sad', 'affectionate', 'indifferent'],
-          description: '情绪标签筛选',
-        },
-        limit: {
-          type: 'number',
-          default: 20,
-          maximum: 100,
-          description: '返回条数',
-        },
-        offset: {
-          type: 'number',
-          default: 0,
-          description: '偏移量',
-        },
-      },
-      required: ['startDate', 'endDate'],
+      startDate: { type: 'string', description: '开始日期 YYYY-MM-DD' },
+      endDate: { type: 'string', description: '结束日期 YYYY-MM-DD' },
+      limit: { type: 'number', description: '返回条数上限', default: 30 },
     },
   },
-  
   {
     name: 'query_emotion_trend',
-    description: '查询某段时间内的情绪趋势数据，用于绘制情绪曲线',
+    description: '查询情绪趋势数据',
     parameters: {
-      type: 'object',
-      properties: {
-        startDate: { type: 'string', description: '开始日期' },
-        endDate: { type: 'string', description: '结束日期' },
-        granularity: {
-          type: 'string',
-          enum: ['day', 'week', 'month'],
-          default: 'day',
-          description: '时间粒度',
-        },
-        sender: {
-          type: 'string',
-          enum: ['self', 'other', 'both'],
-          default: 'both',
-        },
-      },
-      required: ['startDate', 'endDate'],
+      period: { type: 'string', description: '时间范围 7d/30d/90d', default: '30d' },
     },
   },
-  
   {
     name: 'query_statistics',
-    description: '查询统计指标，如消息量、回复延迟、活跃时段等',
+    description: '查询统计指标（消息量、回复延迟、活跃时段等）',
     parameters: {
-      type: 'object',
-      properties: {
-        metric: {
-          type: 'string',
-          enum: [
-            'message_count',      // 消息数量
-            'reply_delay',        // 回复延迟
-            'active_hours',       // 活跃时段
-            'word_freq',          // 词频统计
-            'initiation_ratio',   // 主动发起比例
-            'length_trend',       // 消息长度趋势
-          ],
-          description: '要查询的指标',
-        },
-        startDate: { type: 'string' },
-        endDate: { type: 'string' },
-      },
-      required: ['metric', 'startDate', 'endDate'],
+      metric: { type: 'string', description: '指标名称' },
     },
   },
-  
   {
     name: 'search_keywords',
-    description: '搜索包含特定关键词的消息，分析其上下文',
+    description: '搜索关键词在聊天记录中的出现情况',
     parameters: {
-      type: 'object',
-      properties: {
-        keywords: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '关键词列表',
-        },
-        contextSize: {
-          type: 'number',
-          default: 3,
-          description: '返回每条结果前后的消息数',
-        },
-      },
-      required: ['keywords'],
-    },
-  },
-  
-  {
-    name: 'compare_periods',
-    description: '对比两个时间段的关系变化',
-    parameters: {
-      type: 'object',
-      properties: {
-        period1: {
-          type: 'object',
-          properties: {
-            start: { type: 'string' },
-            end: { type: 'string' },
-            label: { type: 'string' },
-          },
-          required: ['start', 'end'],
-        },
-        period2: {
-          type: 'object',
-          properties: {
-            start: { type: 'string' },
-            end: { type: 'string' },
-            label: { type: 'string' },
-          },
-          required: ['start', 'end'],
-        },
-        metrics: {
-          type: 'array',
-          items: { type: 'string' },
-          default: ['message_count', 'emotion_positive_ratio', 'reply_delay'],
-        },
-      },
-      required: ['period1', 'period2'],
+      keyword: { type: 'string', description: '关键词' },
+      limit: { type: 'number', description: '返回条数上限', default: 20 },
     },
   },
 ];
+
+export function buildToolsPrompt(): string {
+  // 将工具定义转为 markdown 格式注入系统 Prompt
+  // 详见 2.2 节
+}
 ```
 
-### 3.2 工具执行示例
+### 3.2 工具执行器
 
 ```typescript
 // src/ai/tools/executor.ts
 
-class ToolExecutor {
-  constructor(private db: ChatMindDB, private sessionId: string) {}
-  
-  async execute(toolName: string, args: any): Promise<any> {
-    switch (toolName) {
+import { sanitizeText } from '../sanitizer';
+import { db } from '../../db/schema';
+
+export class ToolExecutor {
+  private sessionId: string;
+
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
+  }
+
+  async execute(name: string, params: any): Promise<any> {
+    switch (name) {
       case 'query_messages':
-        return this.queryMessages(args);
+        return this.queryMessages(params);
       case 'query_emotion_trend':
-        return this.queryEmotionTrend(args);
+        return this.queryEmotionTrend(params);
       case 'query_statistics':
-        return this.queryStatistics(args);
-      // ...
+        return this.queryStatistics(params);
+      case 'search_keywords':
+        return this.searchKeywords(params);
+      default:
+        throw new Error(`未知工具: ${name}`);
     }
   }
-  
-  private async queryMessages(args: any) {
-    const { startDate, endDate, sender, keyword, emotion, limit = 20 } = args;
-    
-    let query = this.db.messages
-      .where('timestamp')
+
+  private async queryMessages(params: any) {
+    const msgs = await db.messages
+      .where('[sessionId+timestamp]')
       .between(
-        new Date(startDate).getTime(),
-        new Date(endDate).getTime()
+        [this.sessionId, new Date(params.startDate).getTime()],
+        [this.sessionId, new Date(params.endDate).getTime()],
       )
-      .and(m => m.sessionId === this.sessionId);
-    
-    if (sender && sender !== 'any') {
-      query = query.and(m => m.isSelf === (sender === 'self'));
-    }
-    
-    if (emotion) {
-      query = query.and(m => m.emotion === emotion);
-    }
-    
-    const results = await query.limit(limit).toArray();
-    
-    // 脱敏处理
-    return results.map(m => ({
-      time: new Date(m.timestamp).toISOString(),
+      .limit(params.limit || 30)
+      .toArray();
+
+    return msgs.map(m => ({
+      date: new Date(m.timestamp).toISOString().split('T')[0],
       sender: m.isSelf ? '用户A' : '用户B',
-      content: m.content.substring(0, 200),  // 截断过长消息
+      content: sanitizeText(m.content.substring(0, 200)),
       emotion: m.emotion,
     }));
   }
+
+  // ... 其他工具实现
+}
+
+export function parseToolCalls(text: string): Array<{ name: string; parameters: any }> {
+  const calls: Array<{ name: string; parameters: any }> = [];
+  const regex = /\[TOOL_CALL:\s*(\{[\s\S]*?\})\]/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    try { calls.push(JSON.parse(match[1])); } catch {}
+  }
+  return calls;
+}
+
+export function stripToolCalls(text: string): string {
+  return text.replace(/\[TOOL_CALL:[\s\S]*?\]\s*/g, '');
+}
+
+export function formatToolResults(results: any[]): string {
+  return results.map((r, i) => `[TOOL_RESULT_${i}]: ${JSON.stringify(r)}`).join('\n');
 }
 ```
 
@@ -504,14 +378,14 @@ async function analyzeWithFallback(
 ### 5.2 模型不可用降级链
 
 ```
-用户首选: Claude 3.5 Sonnet
-     ↓ 不可用 / 无 API Key
-备选 1: DeepSeek-V3
-     ↓ 不可用
-备选 2: Ollama (本地)
+用户首选: 配置的云端模型（DeepSeek / Kimi / 通义千问等）
+     ↓ 不可用 / 无 API Key / 网络错误
+备选: Ollama 本地模型（自动检测 localhost:11434）
      ↓ 未安装 / 模型未下载
-降级: 纯规则引擎（本地词典分析）
+降级: 纯规则引擎（本地词典分析，零成本）
 ```
+
+实际实现：用户可配置多个模型，在 `ModelConfigDialog` 中一键切换。
 
 ---
 

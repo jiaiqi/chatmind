@@ -2,9 +2,9 @@
 
 ## 产品需求文档 (PRD)
 
-> 版本: v0.1  
-> 日期: 2026-05-15  
-> 状态: 头脑风暴 / 待评审
+> 版本: v0.2.0  
+> 日期: 2026-05-16  
+> 状态: 已交付 / 持续迭代
 
 ---
 
@@ -112,31 +112,15 @@
 - 一键切换：发现标记错了，点击"这是我的消息/这是对方的消息"
 - 全局修正：把某个昵称的所有消息批量归给用户/对方
 
-#### 3.2.3 身份图谱数据结构
+#### 3.2.3 身份识别实现
 
-```typescript
-interface IdentityGraph {
-  // 用户（分析者本人）
-  self: {
-    primaryWxid: string;        // 主 wxid
-    currentNickname: string;    // 当前昵称
-    aliases: Alias[];           // 曾用名时间线
-  };
-  
-  // 对话参与者
-  participants: {
-    [wxid: string]: {
-      nicknames: string[];      // 所有出现过的昵称
-      remarkName?: string;      // 用户给的备注名
-      role: 'self' | 'other';   // 角色
-    }
-  };
-}
+当前版本采用简化方案，身份映射直接由 `src/stores/identity.ts` 管理：
 
-interface Alias {
-  name: string;
-  startTime: number;  // 开始使用的时间戳
-  endTime?: number;   // 停止使用的时间戳
+- 用户确认的 `senderId → role` 映射存储在 Pinia Store 中
+- 曾用名信息存储于 `DbParticipant.names` 数组中
+- 运行时通过 `names` 数组匹配处理改名场景
+
+> 未来如需更复杂的身份图谱（如 wxid 到多昵称的时间线映射），可在此基础上扩展。
 }
 ```
 
@@ -206,11 +190,18 @@ AI 层（调用大模型，做聚合分析）
 
 #### 3.4.2 支持的 AI 模型
 
-| 模型 | 类型 | 适用场景 |
-|------|------|----------|
-| Ollama + qwen2.5:14b | 本地 | 默认推荐，隐私最好，中文情绪理解好 |
-| DeepSeek-V3 | 云端 | 便宜+中文强，适合需要深度分析时 |
-| Claude | 云端 | 分析深度最强，适合生成报告 |
+| 提供商 | 代表模型 | 类型 |
+|--------|----------|------|
+| DeepSeek | V3, R1 | 云端 |
+| Kimi (月之暗面) | 8K / 32K / 128K | 云端 |
+| MiniMax | abab6.5 / abab7 | 云端 |
+| 百炼 (阿里云) | 通义千问 Plus/Max/Turbo/Coder | 云端 |
+| SiliconFlow | DeepSeek V3/R1, Qwen2.5 | 云端 |
+| 智谱 AI (GLM) | GLM-4 / Flash / Air / Plus | 云端 |
+| 百度千帆 | 文心 4.0 Turbo / 3.5 / Speed | 云端 |
+| 腾讯云 (混元) | Turbo / Pro / Standard | 云端 |
+| Ollama | qwen2.5:7b/14b, deepseek-r1:7b, llama3.2 等 | 本地 |
+| 自定义 | 任意 OpenAI 兼容端点 | 云端/本地 |
 
 ---
 
