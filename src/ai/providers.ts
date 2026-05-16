@@ -23,6 +23,20 @@ export interface ProviderConfig {
 
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
+    id: 'ollama',
+    name: 'Ollama (本地)',
+    baseUrl: 'http://localhost:11434/v1',
+    apiKeyUrl: '',
+    docsUrl: 'https://github.com/ollama/ollama/blob/main/docs/openai.md',
+    isOpenAICompatible: true,
+    models: [
+      { id: 'qwen2.5:7b', name: '通义千问 7B', description: '本地轻量，中文友好' },
+      { id: 'qwen2.5:14b', name: '通义千问 14B', description: '本地平衡型' },
+      { id: 'deepseek-r1:7b', name: 'DeepSeek R1 7B', description: '本地推理模型' },
+      { id: 'llama3.2', name: 'Llama 3.2', description: 'Meta 开源模型' },
+    ],
+  },
+  {
     id: 'deepseek',
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',

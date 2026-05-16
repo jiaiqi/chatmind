@@ -66,6 +66,7 @@ export const useModelConfigStore = defineStore('model-config', () => {
     return settings.value.map(s => {
       const provider = getProviderById(s.providerId)
       const model = provider?.models.find(m => m.id === s.modelId)
+      const isOllama = s.providerId === 'ollama'
       return {
         id: getSettingId(s),
         providerName: provider?.name || s.providerId,
@@ -73,7 +74,7 @@ export const useModelConfigStore = defineStore('model-config', () => {
           ? (s.customModelId || '自定义模型')
           : (model?.name || s.modelId),
         isActive: getSettingId(s) === activeSettingId.value,
-        hasKey: !!s.apiKey,
+        hasKey: isOllama ? true : !!s.apiKey,
       }
     })
   })
@@ -138,7 +139,7 @@ export const useModelConfigStore = defineStore('model-config', () => {
     return {
       provider: provider.id,
       baseUrl: setting.customBaseUrl || provider.baseUrl,
-      apiKey: setting.apiKey,
+      apiKey: setting.providerId === 'ollama' ? '' : setting.apiKey,
       model: setting.providerId === 'custom'
         ? (setting.customModelId || 'custom-model')
         : setting.modelId,

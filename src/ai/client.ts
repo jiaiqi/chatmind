@@ -70,21 +70,19 @@ export class AiClient {
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.config.apiKey}`,
+    }
+
+    // Ollama 不需要 API Key
+    if (this.config.provider !== 'ollama' && this.config.apiKey) {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`
     }
 
     // 合并额外 headers
     if (this.config.extraHeaders) {
       for (const [key, value] of Object.entries(this.config.extraHeaders)) {
-        // 替换模板变量
         const resolved = value.replace('{apiKey}', this.config.apiKey)
         headers[key] = resolved
       }
-    }
-
-    // MiniMax 特殊处理：使用 api_key 而不是 Authorization
-    if (this.config.provider === 'minimax') {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`
     }
 
     return headers

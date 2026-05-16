@@ -7,6 +7,7 @@ import {
 } from 'naive-ui'
 import { useModelConfigStore, type ModelSetting } from '../../stores/model-config'
 import { getProviderById } from '../../ai/providers'
+import { detectOllama, listOllamaModels, formatModelSize, type OllamaModel } from '../../ai/ollama'
 
 const props = defineProps<{
   show: boolean
@@ -26,6 +27,12 @@ const apiKeyInput = ref('')
 const customBaseUrl = ref('')
 const customModelId = ref('')
 
+// Ollama 检测
+const ollamaDetected = ref(false)
+const ollamaDetecting = ref(false)
+const ollamaModels = ref<OllamaModel[]>([])
+const selectedOllamaModel = ref('')
+
 const providerOptions = computed(() =>
   modelConfig.providers.map(p => ({
     label: p.name,
@@ -43,6 +50,7 @@ const modelOptions = computed(() => {
 })
 
 const isCustomProvider = computed(() => selectedProvider.value === 'custom')
+const isOllamaProvider = computed(() => selectedProvider.value === 'ollama')
 
 watch(() => props.show, (show) => {
   if (show) {
@@ -53,6 +61,9 @@ watch(() => props.show, (show) => {
 
 watch(selectedProvider, () => {
   selectedModel.value = ''
+  selectedOllamaModel.value = ''
+  ollamaDetected.value = false
+  ollamaModels.value = []
 })
 
 function resetForm() {
@@ -61,6 +72,48 @@ function resetForm() {
   apiKeyInput.value = ''
   customBaseUrl.value = ''
   customModelId.value = ''
+  selectedOllamaModel.value = ''
+  ollamaDetected.value = false
+  ollamaModels.value = []
+}
+
+async function handleDetectOllama() {
+  ollamaDetecting.value = true
+  try {
+    const detected = await detectOllama()
+    if (detected) {
+      const models = await listOllamaModels()
+      ollamaModels.value = models
+      ollamaDetected.value = true
+      if (models.length > 0) {
+        selectedOllamaModel.value = models[0].model
+      }
+      message.success(`检测到 Ollama，共 ${models.length} 个本地模型`)
+    } else {
+      message.warning('未检测到 Ollama，请确认服务已启动（默认端口 11434）')
+    }
+  } finally {
+    ollamaDetecting.value = false
+  }
+}
+
+function handleAddOllama() {
+  if (!selectedOllamaModel.value) {
+    message.warning('请选择本地模型')
+    return
+  }
+
+  const setting: ModelSetting = {
+    providerId: 'ollama',
+    modelId: selectedOllamaModel.value,
+    apiKey: '',
+    isActive: true,
+  }
+
+  modelConfig.addSetting(setting)
+  message.success('本地模型添加成功')
+  showAddPanel.value = false
+  resetForm()
 }
 
 function handleAdd() {
@@ -68,11 +121,11 @@ function handleAdd() {
     message.warning('请选择模型提供商')
     return
   }
-  if (!isCustomProvider.value && !selectedModel.value) {
+  if (!isCustomProvider.value && !isOllamaProvider.value && !selectedModel.value) {
     message.warning('请选择模型')
     return
   }
-  if (!apiKeyInput.value.trim()) {
+  if (!isOllamaProvider.value && !apiKeyInput.value.trim()) {
     message.warning('请输入 API Key')
     return
   }
@@ -83,7 +136,7 @@ function handleAdd() {
   const setting: ModelSetting = {
     providerId: selectedProvider.value,
     modelId: isCustomProvider.value ? 'custom-model' : selectedModel.value,
-    apiKey: apiKeyInput.value.trim(),
+    apiKey: isOllamaProvider.value ? '' : apiKeyInput.value.trim(),
     customBaseUrl: isCustomProvider.value ? customBaseUrl.value.trim() : undefined,
     customModelId: isCustomProvider.value ? customModelId.value.trim() : undefined,
     isActive: true,
@@ -181,7 +234,7 @@ function handleActivate(id: string) {
             </n-form-item>
 
             <n-form-item
-              v-if="!isCustomProvider"
+              v-if="!isCustomProvider && !isOllamaProvider"
               label="模型"
               required
             >
@@ -191,6 +244,38 @@ function handleActivate(id: string) {
                 placeholder="选择模型"
               />
             </n-form-item>
+
+            <!-- Ollama 本地检测 -->
+            <template v-if="isOllamaProvider">
+              <n-form-item label="本地模型">
+                <n-button
+                  v-if="!ollamaDetected"
+                  :loading="ollamaDetecting"
+                  type="primary"
+                  dashed
+                  block
+                  @click="handleDetectOllama"
+                >
+                  🔍 检测本地 Ollama 服务
+                </n-button>
+                <template v-else>
+                  <n-select
+                    v-model:value="selectedOllamaModel"
+                    placeholder="选择本地模型"
+                  >
+                    <n-option
+                      v-for="m in ollamaModels"
+                      :key="m.model"
+                      :label="`${m.model} (${formatModelSize(m.size)})`"
+                      :value="m.model"
+                    />
+                  </n-select>
+                  <n-text depth="3" style="font-size: 12px; margin-top: 4px; display: block;">
+                    检测到 {{ ollamaModels.length }} 个本地模型
+                  </n-text>
+                </template>
+              </n-form-item>
+            </template>
 
             <template v-if="isCustomProvider">
               <n-form-item label="Base URL" required>
@@ -207,7 +292,7 @@ function handleActivate(id: string) {
               </n-form-item>
             </template>
 
-            <n-form-item label="API Key" required>
+            <n-form-item v-if="!isOllamaProvider" label="API Key" required>
               <n-input
                 v-model:value="apiKeyInput"
                 type="password"
@@ -231,7 +316,15 @@ function handleActivate(id: string) {
 
           <n-space justify="end">
             <n-button @click="showAddPanel = false">取消</n-button>
-            <n-button type="primary" @click="handleAdd">添加</n-button>
+            <n-button
+              v-if="isOllamaProvider"
+              type="primary"
+              :disabled="!selectedOllamaModel"
+              @click="handleAddOllama"
+            >
+              添加本地模型
+            </n-button>
+            <n-button v-else type="primary" @click="handleAdd">添加</n-button>
           </n-space>
         </div>
       </div>
