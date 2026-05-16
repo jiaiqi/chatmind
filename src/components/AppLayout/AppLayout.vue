@@ -8,6 +8,7 @@ import {
 import {
   ChatbubblesOutline, StatsChartOutline,
   TrendingUpOutline, SparklesOutline, TrashOutline,
+  AnalyticsOutline,
 } from '@vicons/ionicons5'
 import { useSessionStore } from '../../stores/session'
 import type { MenuOption } from 'naive-ui'
@@ -39,6 +40,11 @@ const menuOptions = computed<MenuOption[]>(() => {
       key: 'messages',
       label: '聊天记录',
       icon: () => h(NIcon, null, { default: () => h(ChatbubblesOutline) }),
+    },
+    {
+      key: 'analysis',
+      label: '深度分析',
+      icon: () => h(NIcon, null, { default: () => h(AnalyticsOutline) }),
     },
     {
       key: 'ai',

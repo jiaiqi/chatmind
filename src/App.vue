@@ -8,6 +8,7 @@ import DashboardView from './views/DashboardView.vue'
 import TimelineView from './views/TimelineView.vue'
 import MessageListView from './views/MessageListView.vue'
 import AiChatView from './views/AiChatView.vue'
+import AnalysisView from './views/AnalysisView.vue'
 
 const sessionStore = useSessionStore()
 const activeView = ref('dashboard')
@@ -45,6 +46,7 @@ function handleDeleteSession(sessionId: string) {
           <DashboardView v-if="activeView === 'dashboard'" />
           <TimelineView v-else-if="activeView === 'timeline'" />
           <MessageListView v-else-if="activeView === 'messages'" />
+          <AnalysisView v-else-if="activeView === 'analysis'" />
           <AiChatView v-else-if="activeView === 'ai'" />
           <ImportView v-else-if="activeView === 'import'" />
         </AppLayout>
