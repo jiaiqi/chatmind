@@ -1,35 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import { NConfigProvider, NMessageProvider, zhCN, dateZhCN, darkTheme } from 'naive-ui'
-import { useSessionStore } from './stores/session'
 import { useThemeStore } from './stores/theme'
+import { useSessionStore } from './stores/session'
 import AppLayout from './components/AppLayout/AppLayout.vue'
-import ImportView from './views/ImportView.vue'
-import DashboardView from './views/DashboardView.vue'
-import TimelineView from './views/TimelineView.vue'
-import MessageListView from './views/MessageListView.vue'
-import AiChatView from './views/AiChatView.vue'
-import AnalysisView from './views/AnalysisView.vue'
-import ReportExportView from './views/ReportExportView.vue'
 
-const sessionStore = useSessionStore()
 const themeStore = useThemeStore()
-const activeView = ref('dashboard')
-
-const showLayout = computed(() => {
-  return sessionStore.sessions.length > 0 && sessionStore.currentSessionId && activeView.value !== 'import'
-})
-
-watch(() => sessionStore.sessions.length, (len) => {
-  if (len === 0) {
-    activeView.value = 'import'
-  } else if (activeView.value === 'import') {
-    activeView.value = 'dashboard'
-  }
-})
+const sessionStore = useSessionStore()
 
 onMounted(() => {
-  sessionStore.loadSessions()
   themeStore.applyTheme()
 })
 
@@ -46,21 +25,9 @@ function handleDeleteSession(sessionId: string) {
   >
     <n-message-provider>
       <div class="app" :class="{ dark: themeStore.isDark }">
-        <AppLayout
-          v-if="showLayout"
-          v-model:active-view="activeView"
-          @delete-session="handleDeleteSession"
-        >
-          <DashboardView v-if="activeView === 'dashboard'" />
-          <TimelineView v-else-if="activeView === 'timeline'" />
-          <MessageListView v-else-if="activeView === 'messages'" />
-          <AnalysisView v-else-if="activeView === 'analysis'" />
-          <AiChatView v-else-if="activeView === 'ai'" />
-          <ReportExportView v-else-if="activeView === 'report'" />
-          <ImportView v-else-if="activeView === 'import'" />
+        <AppLayout @delete-session="handleDeleteSession">
+          <router-view />
         </AppLayout>
-
-        <ImportView v-else />
       </div>
     </n-message-provider>
   </n-config-provider>

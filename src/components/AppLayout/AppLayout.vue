@@ -11,19 +11,17 @@ import {
   AnalyticsOutline, MoonOutline, SunnyOutline,
   DownloadOutline,
 } from '@vicons/ionicons5'
+import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../../stores/session'
 import { useThemeStore } from '../../stores/theme'
 import type { MenuOption } from 'naive-ui'
 
+const route = useRoute()
+const router = useRouter()
 const sessionStore = useSessionStore()
 const themeStore = useThemeStore()
 
-const props = defineProps<{
-  activeView: string
-}>()
-
 const emit = defineEmits<{
-  'update:activeView': [view: string]
   'deleteSession': [sessionId: string]
 }>()
 
@@ -63,8 +61,10 @@ const menuOptions = computed<MenuOption[]>(() => {
   return options
 })
 
+const activeMenuKey = computed(() => route.path.replace('/', '') || 'dashboard')
+
 function handleMenuUpdate(key: string) {
-  emit('update:activeView', key)
+  router.push(`/${key}`)
 }
 
 const currentSessionName = computed(() => {
@@ -103,7 +103,7 @@ const currentSessionTime = computed(() => {
       </div>
 
       <n-menu
-        :value="activeView"
+        :value="activeMenuKey"
         :collapsed-width="64"
         :collapsed-icon-size="22"
         :options="menuOptions"
@@ -147,7 +147,7 @@ const currentSessionTime = computed(() => {
         <n-button
           text
           size="small"
-          @click="emit('update:activeView', 'import')"
+          @click="router.push('/import')"
         >
           + 导入新数据
         </n-button>

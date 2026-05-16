@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NUpload, NUploadDragger, NText, NIcon, NButton, useMessage } from 'naive-ui'
 import { ArchiveOutline as ArchiveIcon, PlayOutline } from '@vicons/ionicons5'
 import { useImportStore } from '../../stores/import'
@@ -13,6 +14,7 @@ const importStore = useImportStore()
 const identityStore = useIdentityStore()
 const sessionStore = useSessionStore()
 const message = useMessage()
+const router = useRouter()
 
 const isDragging = ref(false)
 
@@ -171,6 +173,7 @@ async function confirmAndImport(selectedSelf: string, aliases: string[]) {
     await sessionStore.loadSessions()
     importStore.currentStep = 'done'
     message.success('导入成功！')
+    await router.push('/dashboard')
   } catch (err: any) {
     importStore.setError(err.message || '导入失败')
     message.error(err.message || '导入失败')
