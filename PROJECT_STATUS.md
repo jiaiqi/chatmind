@@ -243,7 +243,7 @@ aec10f8  init: Vite + Vue 3 + TypeScript project scaffold
 | 报告导出 | 完成 | 支持 PDF / 图片导出，含配置面板 |
 | 单文件体积大 | 低 | 生产包 1.5MB，需代码分割优化 |
 | 数据库无迁移机制 | 中 | 当前 schema 为 v1，未来升级需补迁移 |
-| AI 无超时/重试 | 中 | fetch 无 AbortController，网络波动体验差 |
+| AI 无超时/重试 | **已修复** | 新增 AbortController（30秒超时）+ 自动重试（1次） |
 | 无单元测试 | 中 | 缺少 parsers / analyzers 的自动化测试 |
 
 ---

@@ -11,14 +11,28 @@ export interface AiRequestConfig {
   provider?: string
 }
 
+export interface AiClientOptions {
+  timeout?: number
+  retries?: number
+}
+
 export class AiClient {
-  constructor(private config: AiRequestConfig) {}
+  private timeout: number
+  private retries: number
+
+  constructor(
+    private config: AiRequestConfig,
+    options: AiClientOptions = {},
+  ) {
+    this.timeout = options.timeout ?? 30000
+    this.retries = options.retries ?? 1
+  }
 
   async *chatStream(messages: AiMessage[]): AsyncGenerator<string> {
     const body = this.buildRequestBody(messages)
     const headers = this.buildHeaders()
 
-    const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+    const response = await this.fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -57,6 +71,50 @@ export class AiClient {
         }
       }
     }
+  }
+
+  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    let lastError: Error | undefined
+
+    for (let attempt = 0; attempt <= this.retries; attempt++) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+
+      try {
+        const response = await fetch(url, {
+          ...init,
+          signal: controller.signal,
+        })
+        clearTimeout(timeoutId)
+        return response
+      } catch (err) {
+        clearTimeout(timeoutId)
+
+        // 超时错误转换为用户友好提示
+        if (err instanceof Error && err.name === 'AbortError') {
+          lastError = new Error(`请求超时（${this.timeout / 1000}秒），请检查网络或稍后重试`)
+        } else {
+          lastError = err instanceof Error ? err : new Error(String(err))
+        }
+
+        // 不重试客户端错误（4xx）
+        if (err instanceof Response && err.status >= 400 && err.status < 500) {
+          throw lastError
+        }
+
+        // 超时或网络错误，且还有重试次数
+        if (attempt < this.retries) {
+          await this.delay(1000 * (attempt + 1))
+          continue
+        }
+      }
+    }
+
+    throw lastError ?? new Error('请求失败')
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
   async chat(messages: AiMessage[]): Promise<string> {
