@@ -10,6 +10,7 @@ import TimelineView from './views/TimelineView.vue'
 import MessageListView from './views/MessageListView.vue'
 import AiChatView from './views/AiChatView.vue'
 import AnalysisView from './views/AnalysisView.vue'
+import ReportExportView from './views/ReportExportView.vue'
 
 const sessionStore = useSessionStore()
 const themeStore = useThemeStore()
@@ -55,6 +56,7 @@ function handleDeleteSession(sessionId: string) {
           <MessageListView v-else-if="activeView === 'messages'" />
           <AnalysisView v-else-if="activeView === 'analysis'" />
           <AiChatView v-else-if="activeView === 'ai'" />
+          <ReportExportView v-else-if="activeView === 'report'" />
           <ImportView v-else-if="activeView === 'import'" />
         </AppLayout>
 

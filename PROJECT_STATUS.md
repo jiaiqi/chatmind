@@ -239,7 +239,7 @@ aec10f8  init: Vite + Vue 3 + TypeScript project scaffold
 | Ollama 本地 AI | 完成 | 自动检测本地 Ollama，无需 API Key |
 | 群聊支持有限 | 低 | 当前主要针对一对一对话优化 |
 | 单文件体积大 | 低 | 生产包 1.5MB，需代码分割优化 |
-| 无导出功能 | 中 | 暂不支持 PDF / 图片报告导出 |
+| 报告导出 | 完成 | 支持 PDF / 图片导出，含配置面板 |
 | 单文件体积大 | 低 | 生产包 1.5MB，需代码分割优化 |
 | 数据库无迁移机制 | 中 | 当前 schema 为 v1，未来升级需补迁移 |
 | AI 无超时/重试 | 中 | fetch 无 AbortController，网络波动体验差 |

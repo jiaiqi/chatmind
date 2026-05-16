@@ -9,6 +9,7 @@ import {
   ChatbubblesOutline, StatsChartOutline,
   TrendingUpOutline, SparklesOutline, TrashOutline,
   AnalyticsOutline, MoonOutline, SunnyOutline,
+  DownloadOutline,
 } from '@vicons/ionicons5'
 import { useSessionStore } from '../../stores/session'
 import { useThemeStore } from '../../stores/theme'
@@ -52,6 +53,11 @@ const menuOptions = computed<MenuOption[]>(() => {
       key: 'ai',
       label: 'AI 分析师',
       icon: () => h(NIcon, null, { default: () => h(SparklesOutline) }),
+    },
+    {
+      key: 'report',
+      label: '报告导出',
+      icon: () => h(NIcon, null, { default: () => h(DownloadOutline) }),
     },
   ]
   return options
