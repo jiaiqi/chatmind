@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NGrid, NGridItem, NEmpty, useMessage, NTag, NSpace,
+  NInput, NButton, NH3,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -25,7 +26,9 @@ import {
   calculateEmotionDistribution,
 } from '../analyzers/word-frequency'
 import { formatDuration } from '../analyzers/statistics'
+import { trackKeyword, highlightKeyword } from '../analyzers/keyword-track'
 import type { DbMessage } from '../db/schema'
+import type { KeywordTrendPoint, KeywordMatch } from '../analyzers/keyword-track'
 
 use([
   CanvasRenderer,
@@ -40,6 +43,56 @@ const message = useMessage()
 
 const messages = ref<DbMessage[]>([])
 const isLoading = ref(false)
+
+// 关键词追踪
+const keywordInput = ref('')
+const keywordTrend = ref<KeywordTrendPoint[]>([])
+const keywordMatches = ref<KeywordMatch[]>([])
+const isAnalyzingKeyword = ref(false)
+
+function analyzeKeyword() {
+  const keyword = keywordInput.value.trim()
+  if (!keyword || !messages.value.length) {
+    keywordTrend.value = []
+    keywordMatches.value = []
+    return
+  }
+  isAnalyzingKeyword.value = true
+  const result = trackKeyword(messages.value, keyword, 'day')
+  keywordTrend.value = result.trend
+  keywordMatches.value = result.matches
+  isAnalyzingKeyword.value = false
+}
+
+const hasKeywordResult = computed(() => keywordTrend.value.length > 0)
+
+const keywordTrendOption = computed(() => {
+  if (!keywordTrend.value.length) return {}
+  return buildChartOption(themeStore.isDark, {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['我', '对方'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: keywordTrend.value.map(d => d.date),
+    },
+    yAxis: { type: 'value', name: '次数', minInterval: 1 },
+    series: [
+      {
+        name: '我',
+        type: 'bar',
+        data: keywordTrend.value.map(d => d.selfCount),
+        itemStyle: { color: '#18a058' },
+      },
+      {
+        name: '对方',
+        type: 'bar',
+        data: keywordTrend.value.map(d => d.otherCount),
+        itemStyle: { color: '#2080f0' },
+      },
+    ],
+  })
+})
 
 const hasData = computed(() =>
   sessionStore.currentSession !== null && messages.value.length > 0,
@@ -307,6 +360,63 @@ const emotionDistOption = computed(() => {
         <h2>深度分析</h2>
       </div>
 
+      <!-- 关键词追踪 -->
+      <n-card title="关键词追踪" class="chart-card">
+        <div class="keyword-input-row">
+          <n-input
+            v-model:value="keywordInput"
+            placeholder="输入关键词，如：晚安、哈哈、加班..."
+            clearable
+            style="max-width: 300px"
+            @keyup.enter="analyzeKeyword"
+          />
+          <n-button type="primary" :loading="isAnalyzingKeyword" @click="analyzeKeyword">
+            分析
+          </n-button>
+        </div>
+
+        <template v-if="hasKeywordResult">
+          <v-chart class="chart" :option="keywordTrendOption" autoresize />
+
+          <n-h3 prefix="bar" style="margin-top: 24px; font-size: 16px">
+            共 {{ keywordMatches.length }} 条匹配
+          </n-h3>
+          <div class="keyword-matches">
+            <div
+              v-for="(match, idx) in keywordMatches"
+              :key="idx"
+              class="match-item"
+            >
+              <div class="match-context">
+                <div
+                  v-for="ctx in match.contextBefore"
+                  :key="ctx.id"
+                  class="context-msg context-before"
+                >
+                  <span class="msg-sender">{{ ctx.isSelf ? '我' : '对方' }}</span>
+                  <span class="msg-content">{{ ctx.content }}</span>
+                </div>
+                <div class="match-msg">
+                  <span class="msg-sender">{{ match.message.isSelf ? '我' : '对方' }}</span>
+                  <span class="msg-time">{{ new Date(match.message.timestamp).toLocaleString('zh-CN') }}</span>
+                  <span class="msg-content" v-html="highlightKeyword(match.message.content, keywordInput)"></span>
+                </div>
+                <div
+                  v-for="ctx in match.contextAfter"
+                  :key="ctx.id"
+                  class="context-msg context-after"
+                >
+                  <span class="msg-sender">{{ ctx.isSelf ? '我' : '对方' }}</span>
+                  <span class="msg-content">{{ ctx.content }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <n-empty v-else-if="keywordInput.trim()" description="未找到匹配消息" style="margin-top: 16px" />
+      </n-card>
+
       <!-- 词云 -->
       <n-grid :cols="2" :x-gap="16" class="chart-row">
         <n-grid-item>
@@ -399,5 +509,76 @@ const emotionDistOption = computed(() => {
 
 .calendar-chart {
   height: 220px;
+}
+
+.keyword-input-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.keyword-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.match-item {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--card-bg);
+}
+
+.match-context {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.context-msg {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 2px 0;
+}
+
+.context-before,
+.context-after {
+  opacity: 0.7;
+}
+
+.match-msg {
+  font-size: 14px;
+  padding: 6px 0;
+  border-left: 3px solid #18a058;
+  padding-left: 10px;
+  margin: 4px 0;
+  background: var(--hover-bg);
+  border-radius: 0 4px 4px 0;
+}
+
+.msg-sender {
+  font-weight: 500;
+  margin-right: 8px;
+  color: var(--text-color);
+  min-width: 32px;
+  display: inline-block;
+}
+
+.msg-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+.msg-content :deep(mark) {
+  background: #fff3cd;
+  color: #856404;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 600;
 }
 </style>
