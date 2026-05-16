@@ -93,6 +93,31 @@ export const useSessionStore = defineStore('session', () => {
     await db.messages.update(messageId, { emotion, emotionScore: score, emotionMethod: method })
   }
 
+  async function updateMessageIdentity(messageId: string, isSelf: boolean) {
+    await db.messages.update(messageId, { isSelf })
+  }
+
+  async function batchUpdateIdentityBySender(
+    sessionId: string,
+    senderId: string,
+    isSelf: boolean,
+  ) {
+    const msgs = await db.messages
+      .where('sessionId')
+      .equals(sessionId)
+      .and(m => m.senderId === senderId)
+      .toArray()
+
+    const ids = msgs.map(m => m.id)
+    if (ids.length === 0) return 0
+
+    await db.messages.bulkUpdate(
+      ids.map(id => ({ key: id, changes: { isSelf } })),
+    )
+
+    return ids.length
+  }
+
   async function getParticipants(sessionId: string) {
     return db.participants.where('sessionId').equals(sessionId).toArray()
   }
@@ -115,6 +140,8 @@ export const useSessionStore = defineStore('session', () => {
     getMessagesByTimeRange,
     getMessageCount,
     updateMessageEmotion,
+    updateMessageIdentity,
+    batchUpdateIdentityBySender,
     getParticipants,
     setCurrentSession,
   }

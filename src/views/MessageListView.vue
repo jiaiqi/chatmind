@@ -3,7 +3,9 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NList, NListItem, NThing, NPagination,
   NTag, NEmpty, NSpace, NSelect, useMessage, NPopover,
+  NDropdown, NButton, NIcon, NModal,
 } from 'naive-ui'
+import { EllipsisHorizontalOutline } from '@vicons/ionicons5'
 import { useSessionStore } from '../stores/session'
 import { db } from '../db/schema'
 import { formatDateTime } from '../utils/date'
@@ -54,6 +56,10 @@ const emotionFullLabels: Record<string, string> = {
 
 const allEmotions: EmotionLabel[] = ['positive', 'negative', 'neutral', 'angry', 'sad', 'affectionate', 'indifferent']
 const correctingMsgId = ref<string | null>(null)
+const showBatchModal = ref(false)
+const batchSenderId = ref('')
+const batchSenderName = ref('')
+const batchTargetIsSelf = ref(true)
 
 const senderOptions = computed(() => [
   { label: '全部', value: '' },
@@ -126,6 +132,65 @@ async function handleEmotionChange(msgId: string, newEmotion: EmotionLabel) {
     message.error('更新失败')
   }
 }
+
+async function handleIdentityChange(msgId: string, isSelf: boolean) {
+  try {
+    await sessionStore.updateMessageIdentity(msgId, isSelf)
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg) {
+      msg.isSelf = isSelf
+    }
+    message.success(`已标记为${isSelf ? '我的' : '对方的'}消息`)
+  } catch {
+    message.error('更新失败')
+  }
+}
+
+function openBatchModal(senderId: string, senderName: string, isSelf: boolean) {
+  batchSenderId.value = senderId
+  batchSenderName.value = senderName
+  batchTargetIsSelf.value = isSelf
+  showBatchModal.value = true
+}
+
+async function confirmBatchUpdate() {
+  const sessionId = sessionStore.currentSessionId
+  if (!sessionId) return
+  try {
+    const count = await sessionStore.batchUpdateIdentityBySender(
+      sessionId,
+      batchSenderId.value,
+      batchTargetIsSelf.value,
+    )
+    message.success(`已批量修正 ${count} 条消息`)
+    showBatchModal.value = false
+    loadMessages()
+  } catch {
+    message.error('批量修正失败')
+  }
+}
+
+function getIdentityOptions(msg: DbMessage) {
+  const oppositeLabel = msg.isSelf ? '标记为对方的消息' : '标记为我的消息'
+  const oppositeValue = !msg.isSelf
+  const batchLabel = msg.isSelf
+    ? `将「${msg.senderId}」所有消息归给对方`
+    : `将「${msg.senderId}」所有消息归给我`
+  return [
+    { label: oppositeLabel, key: `switch-${msg.id}` },
+    { label: batchLabel, key: `batch-${msg.senderId}-${oppositeValue}` },
+  ]
+}
+
+function handleIdentitySelect(key: string, msg: DbMessage) {
+  if (key.startsWith('switch-')) {
+    handleIdentityChange(msg.id, !msg.isSelf)
+  } else if (key.startsWith('batch-')) {
+    const parts = key.split('-')
+    const isSelf = parts[parts.length - 1] === 'true'
+    openBatchModal(msg.senderId, msg.senderId, isSelf)
+  }
+}
 </script>
 
 <template>
@@ -195,6 +260,16 @@ async function handleEmotionChange(msgId: string, newEmotion: EmotionLabel) {
                     </div>
                   </div>
                 </n-popover>
+                <n-dropdown
+                  :options="getIdentityOptions(msg)"
+                  @select="(key: string) => handleIdentitySelect(key, msg)"
+                  placement="bottom-end"
+                  trigger="click"
+                >
+                  <n-button text size="tiny" style="margin-left: 4px">
+                    <n-icon :component="EllipsisHorizontalOutline" />
+                  </n-button>
+                </n-dropdown>
               </n-space>
             </template>
             <template #description>
@@ -214,6 +289,25 @@ async function handleEmotionChange(msgId: string, newEmotion: EmotionLabel) {
         />
       </div>
     </n-card>
+
+    <!-- 批量修正确认弹窗 -->
+    <n-modal
+      v-model:show="showBatchModal"
+      title="批量修正身份"
+      preset="dialog"
+      positive-text="确认"
+      negative-text="取消"
+      @positive-click="confirmBatchUpdate"
+    >
+      <n-alert type="warning" title="注意" style="margin-bottom: 12px"
+      >
+        此操作将修改该发送者的所有消息身份，且无法撤销。
+      </n-alert>
+      <p>
+        是否将发送者 <strong>「{{ batchSenderName }}」</strong> 的所有消息标记为
+        <strong>{{ batchTargetIsSelf ? '我的消息' : '对方的消息' }}</strong>？
+      </p>
+    </n-modal>
   </div>
 </template>
 
