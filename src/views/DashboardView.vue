@@ -66,7 +66,6 @@ async function loadData() {
 watch(() => sessionStore.currentSessionId, loadData)
 onMounted(loadData)
 
-// 情绪趋势图表配置
 const emotionChartOption = computed(() => {
   if (!emotionTrend.value.length) return {}
 
@@ -119,7 +118,6 @@ const emotionChartOption = computed(() => {
   }
 })
 
-// 活跃时段图表配置
 const hourlyChartOption = computed(() => {
   if (!stats.value) return {}
   return {
@@ -138,7 +136,6 @@ const hourlyChartOption = computed(() => {
   }
 })
 
-// 消息比例饼图
 const ratioChartOption = computed(() => {
   if (!stats.value) return {}
   return {
@@ -166,7 +163,6 @@ const ratioChartOption = computed(() => {
         <p class="time-range">{{ timeRangeText }}</p>
       </div>
 
-      <!-- 统计卡片 -->
       <n-grid :cols="4" :x-gap="16" :y-gap="16" class="stats-grid">
         <n-grid-item>
           <n-card>
@@ -192,7 +188,6 @@ const ratioChartOption = computed(() => {
 
       <n-divider />
 
-      <!-- 情绪趋势 -->
       <n-card title="情绪趋势" class="chart-card">
         <v-chart class="chart" :option="emotionChartOption" autoresize />
       </n-card>
@@ -209,18 +204,12 @@ const ratioChartOption = computed(() => {
           </n-card>
         </n-grid-item>
       </n-grid>
-
-      <div class="actions">
-        <n-button @click="sessionStore.setCurrentSession('')">
-          导入新数据
-        </n-button>
-      </div>
     </template>
 
     <template v-else>
       <n-empty description="暂无数据，请先导入聊天记录">
         <template #extra>
-          <n-button type="primary" @click="sessionStore.setCurrentSession('')">
+          <n-button type="primary" @click="$emit('switchView', 'import')">
             去导入
           </n-button>
         </template>
@@ -264,10 +253,5 @@ const ratioChartOption = computed(() => {
 
 .bottom-charts {
   margin-top: 16px;
-}
-
-.actions {
-  margin-top: 24px;
-  text-align: center;
 }
 </style>

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NUpload, NUploadDragger, NText, NIcon, useMessage } from 'naive-ui'
-import { ArchiveOutline as ArchiveIcon } from '@vicons/ionicons5'
+import { NUpload, NUploadDragger, NText, NIcon, NButton, useMessage } from 'naive-ui'
+import { ArchiveOutline as ArchiveIcon, PlayOutline } from '@vicons/ionicons5'
 import { useImportStore } from '../../stores/import'
 import { useIdentityStore } from '../../stores/identity'
 import { useSessionStore } from '../../stores/session'
 import { parseFile } from '../../parsers'
 import { analyzeBatchEmotion } from '../../analyzers/emotion'
+import { generateDemoMessages, getDemoParticipants } from '../../utils/demo-data'
 
 const importStore = useImportStore()
 const identityStore = useIdentityStore()
@@ -36,7 +37,6 @@ async function handleFileChange(fileList: File[]) {
     }
     importStore.setParseResults(results)
 
-    // 尝试推断"我"的身份
     for (const result of results) {
       for (const msg of result.messages) {
         if (msg.type === 'system') {
@@ -55,30 +55,45 @@ async function handleFileChange(fileList: File[]) {
   }
 }
 
+async function loadDemoData() {
+  importStore.reset()
+  identityStore.reset()
+  importStore.setParsing(true)
+
+  const messages = generateDemoMessages()
+  const participants = getDemoParticipants()
+
+  importStore.setParseResults([{
+    format: 'demo',
+    rawData: messages,
+    messages,
+    participants,
+    metadata: { fileName: '示例聊天记录 (恋爱故事)' },
+  }])
+
+  importStore.setProgress(100)
+}
+
 async function confirmAndImport(selectedSelf: string, aliases: string[]) {
   importStore.currentStep = 'importing'
 
   try {
     identityStore.setRole(selectedSelf, 'self')
 
-    // 为所有其他参与者设置 other
     for (const p of importStore.allParticipants) {
       if (p.name !== selectedSelf && !identityStore.confirmedMapping.has(p.name)) {
         identityStore.setRole(p.name, 'other')
       }
     }
 
-    // 添加曾用名
     for (const alias of aliases) {
       identityStore.addAlias({ name: alias, startTime: 0 })
     }
 
-    // 导入到数据库
     for (const result of importStore.parseResults) {
       const sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 
-      // 创建参与者
-      const participantMap = new Map<string, string>() // name -> id
+      const participantMap = new Map<string, string>()
       const participants = result.participants.map((p, idx) => {
         const id = `${sessionId}-p${idx}`
         participantMap.set(p.name, id)
@@ -101,7 +116,6 @@ async function confirmAndImport(selectedSelf: string, aliases: string[]) {
         }
       })
 
-      // 处理消息
       let minTime = Infinity
       let maxTime = 0
       const messages = result.messages.map((m, idx) => {
@@ -124,14 +138,12 @@ async function confirmAndImport(selectedSelf: string, aliases: string[]) {
         return msg
       })
 
-      // 情绪分析
       const emotionResults = analyzeBatchEmotion(messages)
       for (let i = 0; i < messages.length; i++) {
         messages[i].emotion = emotionResults[i].emotion as any
         messages[i].emotionScore = emotionResults[i].score
       }
 
-      // 更新参与者统计
       for (const p of participants) {
         const pMessages = messages.filter(m => m.senderId === p.id)
         p.messageCount = pMessages.length
@@ -141,7 +153,6 @@ async function confirmAndImport(selectedSelf: string, aliases: string[]) {
         }
       }
 
-      // 创建会话
       await sessionStore.createSession({
         id: sessionId,
         name: result.metadata.fileName.replace(/\.\w+$/, ''),
@@ -196,6 +207,23 @@ defineExpose({ confirmAndImport })
       </n-upload-dragger>
     </n-upload>
 
+    <div class="divider">
+      <span class="divider-text">或</span>
+    </div>
+
+    <n-button
+      size="large"
+      type="primary"
+      ghost
+      block
+      @click="loadDemoData"
+    >
+      <template #icon>
+        <n-icon><play-outline /></n-icon>
+      </template>
+      使用示例数据体验（恋爱故事）
+    </n-button>
+
     <div v-if="importStore.isParsing" class="progress-area">
       <n-text>解析中... {{ importStore.parseProgress }}%</n-text>
     </div>
@@ -216,6 +244,26 @@ defineExpose({ confirmAndImport })
 .dragging {
   border-color: #18a058;
   background: #f0f9f4;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  color: #999;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e0e0e0;
+}
+
+.divider-text {
+  padding: 0 16px;
+  font-size: 14px;
 }
 
 .progress-area {
