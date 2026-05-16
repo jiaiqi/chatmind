@@ -16,9 +16,11 @@ import { useSessionStore } from '../stores/session'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
 import { calculateEmotionTrend } from '../analyzers/emotion'
+import { detectAutoEvents } from '../analyzers/event-markers'
 import { formatDateTime } from '../utils/date'
 import type { DbMessage } from '../db/schema'
 import type { EmotionLabel } from '../types/message'
+import type { ChatEvent } from '../analyzers/event-markers'
 
 use([
   CanvasRenderer,
@@ -36,6 +38,7 @@ const emotionTrend = ref<any[]>([])
 const selectedDate = ref<string | null>(null)
 const selectedMessages = ref<DbMessage[]>([])
 const correctingMsgId = ref<string | null>(null)
+const events = ref<ChatEvent[]>([])
 
 const emotionColors: Record<EmotionLabel, string> = {
   positive: '#18a058',
@@ -101,6 +104,7 @@ async function loadData() {
   try {
     messages.value = await sessionStore.getMessagesByTimeRange(sessionId, 0, Date.now())
     emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
+    events.value = detectAutoEvents(messages.value)
   } catch (err) {
     message.error('加载数据失败')
   }
@@ -190,6 +194,35 @@ function getEmotionTag(emotion?: EmotionLabel) {
     color: emotionColors[emotion] || '#909399',
   }
 }
+
+function getEventTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    emotion_peak: '情绪低谷',
+    silence_end: '沉默结束',
+    volume_spike: '聊天高峰',
+    argument: '争吵',
+    milestone: '里程碑',
+  }
+  return labels[type] || type
+}
+
+function getEventTagType(severity: string): any {
+  const types: Record<string, any> = {
+    high: 'error',
+    medium: 'warning',
+    low: 'info',
+  }
+  return types[severity] || 'default'
+}
+
+function handleEventClick(eventDate: string) {
+  selectedDate.value = eventDate
+  const start = new Date(eventDate).getTime()
+  const end = start + 24 * 60 * 60 * 1000
+  selectedMessages.value = messages.value.filter(
+    m => m.timestamp >= start && m.timestamp < end,
+  )
+}
 </script>
 
 <template>
@@ -204,6 +237,26 @@ function getEmotionTag(emotion?: EmotionLabel) {
       <n-text depth="3" style="display: block; text-align: center; margin-top: 8px">
         点击曲线上的任意点，查看当天的聊天记录
       </n-text>
+    </n-card>
+
+    <!-- 事件标记 -->
+    <n-card v-if="events.length > 0" title="关键事件" class="events-card">
+      <n-space vertical size="small">
+        <div
+          v-for="evt in events"
+          :key="`${evt.date}-${evt.type}`"
+          class="event-item"
+          @click="handleEventClick(evt.date)"
+        >
+          <n-tag :type="getEventTagType(evt.severity)" size="small" style="min-width: 64px; text-align: center">
+            {{ getEventTypeLabel(evt.type) }}
+          </n-tag>
+          <span class="event-date">{{ evt.date }}</span>
+          <span class="event-title">{{ evt.title }}</span>
+          <span class="event-desc">{{ evt.description }}</span>
+          <n-button text size="tiny" type="primary" style="margin-left: auto">查看</n-button>
+        </div>
+      </n-space>
     </n-card>
 
     <n-card v-if="selectedDate" :title="`${selectedDate} 的聊天记录`" class="detail-card">
@@ -319,5 +372,45 @@ function getEmotionTag(emotion?: EmotionLabel) {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
+}
+
+.events-card {
+  margin-bottom: 16px;
+}
+
+.event-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid var(--border-color);
+}
+
+.event-item:hover {
+  background: var(--hover-bg);
+}
+
+.event-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 80px;
+}
+
+.event-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.event-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
