@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NGrid, NGridItem, NEmpty, useMessage, NTag, NSpace,
-  NInput, NButton, NH3,
+  NInput, NButton, NH3, NProgress, NDivider,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -25,7 +25,7 @@ import {
   calculateCalendarData,
   calculateEmotionDistribution,
 } from '../analyzers/word-frequency'
-import { formatDuration } from '../analyzers/statistics'
+import { calculateStatistics, formatDuration } from '../analyzers/statistics'
 import { calculateEmotionDynamics } from '../analyzers/emotion-dynamics'
 import { trackKeyword, highlightKeyword } from '../analyzers/keyword-track'
 import { calculateTimeShift } from '../analyzers/time-shift'
@@ -394,6 +394,48 @@ const emotionDistOption = computed(() => {
     ],
   })
 })
+
+// 并排对比数据
+const comparisonData = computed(() => {
+  if (!messages.value.length) return null
+
+  const stats = calculateStatistics(messages.value)
+  const selfMsgs = messages.value.filter(m => m.isSelf)
+  const otherMsgs = messages.value.filter(m => !m.isSelf)
+
+  const { selfWords, otherWords } = calculateWordFrequency(messages.value, 10)
+
+  const selfEmotions = selfMsgs.reduce((acc, m) => {
+    if (m.emotion) acc[m.emotion] = (acc[m.emotion] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const otherEmotions = otherMsgs.reduce((acc, m) => {
+    if (m.emotion) acc[m.emotion] = (acc[m.emotion] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
+  const selfTotalEmotion = Object.values(selfEmotions).reduce((a, b) => a + b, 0) || 1
+  const otherTotalEmotion = Object.values(otherEmotions).reduce((a, b) => a + b, 0) || 1
+
+  const selfPositiveRatio = ((selfEmotions['positive'] || 0) + (selfEmotions['affectionate'] || 0)) / selfTotalEmotion
+  const otherPositiveRatio = ((otherEmotions['positive'] || 0) + (otherEmotions['affectionate'] || 0)) / otherTotalEmotion
+
+  return {
+    selfWords: selfWords.slice(0, 10),
+    otherWords: otherWords.slice(0, 10),
+    selfMessageCount: selfMsgs.length,
+    otherMessageCount: otherMsgs.length,
+    selfAvgLength: stats.avgLength.self.toFixed(1),
+    otherAvgLength: stats.avgLength.other.toFixed(1),
+    selfReplyDelay: formatDuration(stats.avgSelfReplyDelay),
+    otherReplyDelay: formatDuration(stats.avgOtherReplyDelay),
+    selfPositiveRatio,
+    otherPositiveRatio,
+    selfIndifferentRatio: (selfEmotions['indifferent'] || 0) / selfTotalEmotion,
+    otherIndifferentRatio: (otherEmotions['indifferent'] || 0) / otherTotalEmotion,
+  }
+})
 </script>
 
 <template>
@@ -458,6 +500,114 @@ const emotionDistOption = computed(() => {
         </template>
 
         <n-empty v-else-if="keywordInput.trim()" description="未找到匹配消息" style="margin-top: 16px" />
+      </n-card>
+
+      <!-- 并排对比 -->
+      <n-card v-if="comparisonData" title="双方对比" class="chart-card">
+        <n-grid :cols="2" :x-gap="24">
+          <n-grid-item>
+            <div class="comparison-column">
+              <div class="comparison-header" style="color: #18a058">
+                <n-tag type="success" size="small">我</n-tag>
+                <span class="comparison-count">{{ comparisonData.selfMessageCount }} 条消息</span>
+              </div>
+              <div class="comparison-words">
+                <div v-for="(w, i) in comparisonData.selfWords" :key="i" class="comparison-word-row">
+                  <span class="comparison-rank">{{ i + 1 }}</span>
+                  <span class="comparison-word">{{ w.word }}</span>
+                  <n-progress
+                    type="line"
+                    :percentage="Math.min(100, (w.count / comparisonData.selfWords[0].count) * 100)"
+                    :height="6"
+                    :show-indicator="false"
+                    color="#18a058"
+                    style="width: 80px"
+                  />
+                  <span class="comparison-word-count">{{ w.count }}</span>
+                </div>
+              </div>
+            </div>
+          </n-grid-item>
+
+          <n-grid-item>
+            <div class="comparison-column">
+              <div class="comparison-header" style="color: #2080f0">
+                <n-tag type="info" size="small">对方</n-tag>
+                <span class="comparison-count">{{ comparisonData.otherMessageCount }} 条消息</span>
+              </div>
+              <div class="comparison-words">
+                <div v-for="(w, i) in comparisonData.otherWords" :key="i" class="comparison-word-row">
+                  <span class="comparison-rank">{{ i + 1 }}</span>
+                  <span class="comparison-word">{{ w.word }}</span>
+                  <n-progress
+                    type="line"
+                    :percentage="Math.min(100, (w.count / comparisonData.otherWords[0].count) * 100)"
+                    :height="6"
+                    :show-indicator="false"
+                    color="#2080f0"
+                    style="width: 80px"
+                  />
+                  <span class="comparison-word-count">{{ w.count }}</span>
+                </div>
+              </div>
+            </div>
+          </n-grid-item>
+        </n-grid>
+
+        <n-divider style="margin: 16px 0" />
+
+        <n-grid :cols="5" :x-gap="16">
+          <n-grid-item>
+            <div class="comparison-metric">
+              <div class="comparison-metric-label">平均字数</div>
+              <div class="comparison-metric-value">
+                <span style="color: #18a058">{{ comparisonData.selfAvgLength }}</span>
+                <span style="color: #999; margin: 0 4px">vs</span>
+                <span style="color: #2080f0">{{ comparisonData.otherAvgLength }}</span>
+              </div>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="comparison-metric">
+              <div class="comparison-metric-label">平均回复时间</div>
+              <div class="comparison-metric-value">
+                <span style="color: #18a058">{{ comparisonData.selfReplyDelay }}</span>
+                <span style="color: #999; margin: 0 4px">vs</span>
+                <span style="color: #2080f0">{{ comparisonData.otherReplyDelay }}</span>
+              </div>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="comparison-metric">
+              <div class="comparison-metric-label">正面情绪</div>
+              <div class="comparison-metric-value">
+                <span style="color: #18a058">{{ (comparisonData.selfPositiveRatio * 100).toFixed(1) }}%</span>
+                <span style="color: #999; margin: 0 4px">vs</span>
+                <span style="color: #2080f0">{{ (comparisonData.otherPositiveRatio * 100).toFixed(1) }}%</span>
+              </div>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="comparison-metric">
+              <div class="comparison-metric-label">敷衍占比</div>
+              <div class="comparison-metric-value">
+                <span style="color: #18a058">{{ (comparisonData.selfIndifferentRatio * 100).toFixed(1) }}%</span>
+                <span style="color: #999; margin: 0 4px">vs</span>
+                <span style="color: #2080f0">{{ (comparisonData.otherIndifferentRatio * 100).toFixed(1) }}%</span>
+              </div>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="comparison-metric">
+              <div class="comparison-metric-label">消息占比</div>
+              <div class="comparison-metric-value">
+                <span style="color: #18a058">{{ ((comparisonData.selfMessageCount / (comparisonData.selfMessageCount + comparisonData.otherMessageCount)) * 100).toFixed(1) }}%</span>
+                <span style="color: #999; margin: 0 4px">vs</span>
+                <span style="color: #2080f0">{{ ((comparisonData.otherMessageCount / (comparisonData.selfMessageCount + comparisonData.otherMessageCount)) * 100).toFixed(1) }}%</span>
+              </div>
+            </div>
+          </n-grid-item>
+        </n-grid>
       </n-card>
 
       <!-- 词云 -->
@@ -721,6 +871,72 @@ const emotionDistOption = computed(() => {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+.comparison-column {
+  padding: 8px;
+}
+
+.comparison-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.comparison-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.comparison-words {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comparison-word-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.comparison-rank {
+  width: 18px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.comparison-word {
+  flex: 1;
+  color: var(--text-color);
+}
+
+.comparison-word-count {
+  width: 28px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.comparison-metric {
+  text-align: center;
+  padding: 8px;
+}
+
+.comparison-metric-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.comparison-metric-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
 }
 
 .keyword-input-row {
