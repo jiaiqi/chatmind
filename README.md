@@ -1,5 +1,137 @@
-# Vue 3 + TypeScript + Vite
+# ChatMind
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+> 用 AI 读懂你们的关系
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+ChatMind 是一款本地优先的 AI 微信聊天记录分析工具。它通过智能身份识别、情绪趋势分析和关系健康度评估，帮助你客观理解一段关系的真实状态。
+
+---
+
+## 核心特性
+
+- **本地优先，隐私至上**：所有聊天记录存储在浏览器 IndexedDB，不上传云端，数据完全由你掌控
+- **智能身份识别**：导入后强制确认"我是谁"，支持曾用名时间线，彻底解决"分不清双方"的痛点
+- **关系健康度评分**：0-100 分综合评估，从互动平衡、情绪正向、回复及时、互动稳定、聊天深度五个维度量化关系质量
+- **危险信号检测**：自动识别倾诉不对等、连续沉默期、负面表达激增、敷衍回应增多、回复速度下降等预警信号
+- **多模型 AI 分析师**：支持 DeepSeek、Kimi、通义千问、智谱、MiniMax 等 8 家国产模型，流式输出实时洞察
+- **丰富的可视化**：情绪趋势曲线、活跃时段分布、词云、聊天日历热力图、回复延迟分布等 9 大图表
+- **暗色模式**：完整的暗色主题适配，包括所有 ECharts 图表
+
+---
+
+## 快速开始
+
+```bash
+# 克隆项目
+git clone <repo-url>
+cd chatmind
+
+# 安装依赖
+npm install
+
+# 开发预览
+npm run dev
+
+# 构建
+npm run build
+```
+
+打开浏览器访问 `http://localhost:5173`，点击**"使用示例数据体验"**即可零配置试用全部功能。
+
+---
+
+## 使用流程
+
+```
+1. 导入聊天记录 → 2. 确认身份 → 3. 查看分析
+```
+
+**支持的导入格式**：
+- WeFlow 导出的 JSON / CSV（推荐，信息最完整）
+- 微信自带备份的 TXT（自动识别 3 种常见格式）
+- 内置示例数据（模拟恋爱故事，无需真实数据即可体验）
+
+---
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 前端框架 | Vue 3 + TypeScript |
+| 构建工具 | Vite |
+| UI 组件库 | Naive UI |
+| 状态管理 | Pinia |
+| 可视化 | ECharts + vue-echarts |
+| 词云 | echarts-wordcloud |
+| 数据库 | IndexedDB + Dexie.js |
+| CSV 解析 | PapaParse |
+
+---
+
+## 项目结构
+
+```
+src/
+├── ai/                    # AI 客户端、脱敏工具
+├── analyzers/             # 分析引擎（统计、情绪、危险信号、健康度）
+├── components/            # 组件（导入、身份选择、布局、模型配置）
+├── db/                    # IndexedDB 表结构
+├── parsers/               # 导入解析器（WeFlow JSON/CSV、通用 TXT）
+├── stores/                # Pinia 状态管理
+├── types/                 # TypeScript 类型定义
+├── utils/                 # 工具函数（日期、情感词典、图表主题）
+├── views/                 # 页面视图
+│   ├── ImportView.vue     # 导入页
+│   ├── DashboardView.vue  # 分析仪表盘
+│   ├── TimelineView.vue   # 情绪时间轴
+│   ├── AnalysisView.vue   # 深度分析
+│   ├── MessageListView.vue# 聊天记录列表
+│   └── AiChatView.vue     # AI 分析师
+├── App.vue
+└── main.ts
+```
+
+---
+
+## 开发计划
+
+### 已交付（v0.2.0）
+- 数据导入 + 身份识别系统
+- 规则引擎情绪分析 + 情绪趋势可视化
+- 统计分析与深度可视化（词云、日历、延迟、长度）
+- AI 分析师（多模型、流式输出）
+- 关系健康度评分 + 危险信号检测
+- 暗色模式
+
+### 待开发（按优先级）
+
+**Phase 1: 体验优化**
+- [ ] 报告导出（PDF / 图片）
+- [ ] 更多示例数据（职场、亲情、友情）
+- [ ] 聊天记录对比分析（热恋期 vs 近期）
+
+**Phase 2: 功能增强**
+- [ ] Ollama 本地 AI 支持（完全离线运行）
+- [ ] Function Calling 工具（让 AI 能查询具体消息）
+- [ ] 关键词追踪（追踪"分手""结婚"等词的出现频率变化）
+- [ ] 沉默期检测 + Conversation Killer 分析
+
+**Phase 3: 工程化**
+- [ ] Electron 桌面端
+- [ ] 数据库迁移机制
+- [ ] 单元测试覆盖（Vitest）
+- [ ] ECharts 按需加载/代码分割
+
+---
+
+## 隐私声明
+
+ChatMind 坚持本地优先原则：
+- 所有聊天记录保存在你的浏览器中，不上传任何服务器
+- 调用云端 AI 时，仅发送统计数据和脱敏后的样本（可关闭）
+- 未来支持 Ollama 本地模型，实现完全离线分析
+
+---
+
+## License
+
+MIT
