@@ -28,6 +28,7 @@ import {
 import { formatDuration } from '../analyzers/statistics'
 import { calculateEmotionDynamics } from '../analyzers/emotion-dynamics'
 import { trackKeyword, highlightKeyword } from '../analyzers/keyword-track'
+import { calculateTimeShift } from '../analyzers/time-shift'
 import type { DbMessage } from '../db/schema'
 import type { KeywordTrendPoint, KeywordMatch } from '../analyzers/keyword-track'
 
@@ -320,6 +321,41 @@ const emotionDynamics = computed(() => {
   return calculateEmotionDynamics(messages.value)
 })
 
+// 聊天时段迁移
+const timeShiftData = computed(() => {
+  if (!messages.value.length) return null
+  return calculateTimeShift(messages.value)
+})
+
+const timeShiftOption = computed(() => {
+  if (!timeShiftData.value) return {}
+  const shifts = timeShiftData.value.hourlyShifts
+  return buildChartOption(themeStore.isDark, {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: ['前期', '后期'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: shifts.map(d => `${d.hour}时`),
+    },
+    yAxis: { type: 'value', name: '消息数' },
+    series: [
+      {
+        name: '前期',
+        type: 'bar',
+        data: shifts.map(d => d.beforeCount),
+        itemStyle: { color: '#909399', opacity: 0.7 },
+      },
+      {
+        name: '后期',
+        type: 'bar',
+        data: shifts.map(d => d.afterCount),
+        itemStyle: { color: '#2080f0' },
+      },
+    ],
+  })
+})
+
 const emotionDistOption = computed(() => {
   if (!emotionDistData.value) return {}
 
@@ -464,6 +500,22 @@ const emotionDistOption = computed(() => {
           </n-card>
         </n-grid-item>
       </n-grid>
+
+      <!-- 聊天时段迁移 -->
+      <n-card v-if="timeShiftData" title="聊天时段迁移" class="chart-card">
+        <v-chart class="chart" :option="timeShiftOption" autoresize />
+        <n-space v-if="timeShiftData" size="small" style="margin-top: 12px">
+          <n-tag v-if="timeShiftData.mostDeclinedHour" type="warning" size="small">
+            {{ timeShiftData.mostDeclinedHour.hour }}时 减少最多（-{{ timeShiftData.mostDeclinedHour.change }}条）
+          </n-tag>
+          <n-tag v-if="timeShiftData.mostIncreasedHour" type="success" size="small">
+            {{ timeShiftData.mostIncreasedHour.hour }}时 增加最多（+{{ timeShiftData.mostIncreasedHour.change }}条）
+          </n-tag>
+          <n-tag size="small">
+            整体{{ timeShiftData.overallChangeRatio >= 0 ? '增加' : '减少' }} {{ (Math.abs(timeShiftData.overallChangeRatio) * 100).toFixed(0) }}%
+          </n-tag>
+        </n-space>
+      </n-card>
 
       <!-- 情绪分布 -->
       <n-card title="情绪分布对比" class="chart-card">
