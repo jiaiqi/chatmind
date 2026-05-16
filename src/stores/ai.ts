@@ -6,6 +6,8 @@ import { useSessionStore } from './session'
 import { calculateStatistics } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { formatDate } from '../utils/date'
+import { buildToolsPrompt } from '../ai/tools/definitions'
+import { ToolExecutor, parseToolCalls, stripToolCalls, formatToolResults } from '../ai/tools/executor'
 import type { AiMessage } from '../ai/client'
 
 export interface ChatMessage {
@@ -56,6 +58,8 @@ export const useAiStore = defineStore('ai', () => {
       `${t.date}: 我(😊${t.selfPositive} 😟${t.selfNegative}) 对方(😊${t.otherPositive} 😟${t.otherNegative})`
     ).join('\n')
 
+    const toolsPrompt = buildToolsPrompt()
+
     return `你是 ChatMind 的 AI 关系分析师。你正在分析一段微信聊天记录，基于客观数据给出洞察。
 
 ## 当前分析的数据概览
@@ -75,7 +79,9 @@ ${trendSummary}
 3. 平衡视角，同时分析双方的互动模式
 4. 用中文回答，简洁清晰
 
-你可以回答用户关于这段关系的任何问题，如情绪分析、沟通模式、潜在问题、改善建议等。`
+你可以回答用户关于这段关系的任何问题，如情绪分析、沟通模式、潜在问题、改善建议等。
+
+${toolsPrompt}`
   }
 
   async function sendMessage(userContent: string, onChunk?: (chunk: string) => void) {
@@ -121,11 +127,49 @@ ${trendSummary}
     isGenerating.value = true
 
     try {
+      // 第一轮：获取 AI 初始回复
+      let firstResponse = ''
       for await (const chunk of client.chatStream(history)) {
-        assistantMsg.content += chunk
-        onChunk?.(chunk)
+        firstResponse += chunk
+        // 只在没有检测到工具调用标记时才实时显示
+        if (!firstResponse.includes('[TOOL_CALL:')) {
+          assistantMsg.content = firstResponse
+          onChunk?.(chunk)
+        }
       }
-      assistantMsg.isStreaming = false
+
+      // 检测工具调用
+      const toolCalls = parseToolCalls(firstResponse)
+
+      if (toolCalls.length > 0) {
+        // 有工具调用，执行查询
+        assistantMsg.content = '正在查询相关数据...'
+
+        const session = sessionStore.currentSession
+        const executor = new ToolExecutor(session!.id)
+        const results = await Promise.all(toolCalls.map(c => executor.execute(c)))
+
+        // 构建第二轮对话历史
+        const toolResultText = formatToolResults(results)
+        const secondHistory: AiMessage[] = [
+          ...history,
+          { role: 'assistant', content: firstResponse },
+          { role: 'user', content: `以下是工具查询结果，请基于这些真实数据继续回答用户的问题（不要编造数据）：\n${toolResultText}` },
+        ]
+
+        // 第二轮：获取最终回答
+        assistantMsg.content = ''
+        assistantMsg.isStreaming = true
+        for await (const chunk of client.chatStream(secondHistory)) {
+          assistantMsg.content += chunk
+          onChunk?.(chunk)
+        }
+        assistantMsg.isStreaming = false
+      } else {
+        // 没有工具调用，清理标记后显示
+        assistantMsg.content = stripToolCalls(firstResponse)
+        assistantMsg.isStreaming = false
+      }
     } catch (err: any) {
       assistantMsg.content = `出错了: ${err.message}`
       assistantMsg.isStreaming = false
