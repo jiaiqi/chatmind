@@ -247,16 +247,16 @@ function handleKeydown(e: KeyboardEvent) {
   max-width: 70%;
   padding: 12px 16px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--card-bg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .message-row.user .message-bubble {
-  background: #e6f7ff;
+  background: var(--message-self-bg);
 }
 
 .message-row.assistant .message-bubble {
-  background: #f6ffed;
+  background: var(--message-assistant-bg);
 }
 
 .message-content {

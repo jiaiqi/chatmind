@@ -13,6 +13,8 @@ import {
   TitleComponent, DataZoomComponent,
 } from 'echarts/components'
 import { useSessionStore } from '../stores/session'
+import { useThemeStore } from '../stores/theme'
+import { buildChartOption } from '../utils/chart-theme'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { formatDateTime } from '../utils/date'
 import type { DbMessage } from '../db/schema'
@@ -26,6 +28,7 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const themeStore = useThemeStore()
 const message = useMessage()
 
 const messages = ref<DbMessage[]>([])
@@ -71,7 +74,7 @@ onMounted(loadData)
 const chartOption = computed(() => {
   if (!emotionTrend.value.length) return {}
 
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: {
       trigger: 'axis',
       formatter: (params: any[]) => {
@@ -128,7 +131,7 @@ const chartOption = computed(() => {
         lineStyle: { type: 'dashed' },
       },
     ],
-  }
+  })
 })
 
 function handleChartClick(params: any) {
@@ -226,7 +229,7 @@ function getEmotionTag(emotion?: EmotionLabel) {
 
 .msg-time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .msg-content {

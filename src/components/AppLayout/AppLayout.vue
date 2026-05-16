@@ -8,12 +8,14 @@ import {
 import {
   ChatbubblesOutline, StatsChartOutline,
   TrendingUpOutline, SparklesOutline, TrashOutline,
-  AnalyticsOutline,
+  AnalyticsOutline, MoonOutline, SunnyOutline,
 } from '@vicons/ionicons5'
 import { useSessionStore } from '../../stores/session'
+import { useThemeStore } from '../../stores/theme'
 import type { MenuOption } from 'naive-ui'
 
 const sessionStore = useSessionStore()
+const themeStore = useThemeStore()
 
 const props = defineProps<{
   activeView: string
@@ -103,19 +105,39 @@ const currentSessionTime = computed(() => {
       />
 
       <div class="sider-footer">
-        <n-tooltip placement="right">
-          <template #trigger>
-            <n-button
-              text
-              circle
-              size="small"
-              @click="emit('deleteSession', sessionStore.currentSessionId!)"
-            >
-              <n-icon><trash-outline /></n-icon>
-            </n-button>
-          </template>
-          删除当前会话
-        </n-tooltip>
+        <n-space align="center">
+          <n-tooltip placement="right">
+            <template #trigger>
+              <n-button
+                text
+                circle
+                size="small"
+                @click="themeStore.toggle()"
+              >
+                <n-icon>
+                  <moon-outline v-if="!themeStore.isDark" />
+                  <sunny-outline v-else />
+                </n-icon>
+              </n-button>
+            </template>
+            {{ themeStore.isDark ? '切换亮色' : '切换暗色' }}
+          </n-tooltip>
+
+          <n-tooltip placement="right">
+            <template #trigger>
+              <n-button
+                text
+                circle
+                size="small"
+                @click="emit('deleteSession', sessionStore.currentSessionId!)"
+              >
+                <n-icon><trash-outline /></n-icon>
+              </n-button>
+            </template>
+            删除当前会话
+          </n-tooltip>
+        </n-space>
+
         <n-button
           text
           size="small"
@@ -146,7 +168,7 @@ const currentSessionTime = computed(() => {
 .logo-text {
   font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-color);
 }
 
 .session-info {
@@ -156,7 +178,7 @@ const currentSessionTime = computed(() => {
 .session-name {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -164,7 +186,7 @@ const currentSessionTime = computed(() => {
 
 .session-meta {
   font-size: 12px;
-  color: #999;
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -174,14 +196,14 @@ const currentSessionTime = computed(() => {
   left: 0;
   right: 0;
   padding: 12px 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .main-content {
-  background: #f5f7fa;
+  background: var(--app-bg);
   overflow-y: auto;
 }
 </style>

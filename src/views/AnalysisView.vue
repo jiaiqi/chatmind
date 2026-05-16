@@ -15,6 +15,8 @@ import {
 } from 'echarts/components'
 import 'echarts-wordcloud'
 import { useSessionStore } from '../stores/session'
+import { useThemeStore } from '../stores/theme'
+import { buildChartOption } from '../utils/chart-theme'
 import {
   calculateWordFrequency,
   calculateReplyDelayDistribution,
@@ -33,6 +35,7 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const themeStore = useThemeStore()
 const message = useMessage()
 
 const messages = ref<DbMessage[]>([])
@@ -70,7 +73,7 @@ const wordCloudData = computed(() => {
   }
 })
 
-const selfWordCloudOption = computed(() => ({
+const selfWordCloudOption = computed(() => buildChartOption(themeStore.isDark, {
   tooltip: { show: true },
   series: [{
     type: 'wordCloud',
@@ -87,17 +90,17 @@ const selfWordCloudOption = computed(() => ({
     textStyle: {
       fontFamily: 'sans-serif',
       fontWeight: 'bold',
-      color: () => `hsl(${Math.random() * 60 + 100}, 70%, 50%)`,
+      color: () => `hsl(${Math.random() * 60 + 100}, 70%, ${themeStore.isDark ? 65 : 50}%)`,
     },
     emphasis: {
       focus: 'self',
-      textStyle: { textShadowBlur: 10, textShadowColor: '#333' },
+      textStyle: { textShadowBlur: 10, textShadowColor: themeStore.isDark ? '#000' : '#333' },
     },
     data: wordCloudData.value.self,
   }],
 }))
 
-const otherWordCloudOption = computed(() => ({
+const otherWordCloudOption = computed(() => buildChartOption(themeStore.isDark, {
   tooltip: { show: true },
   series: [{
     type: 'wordCloud',
@@ -114,11 +117,11 @@ const otherWordCloudOption = computed(() => ({
     textStyle: {
       fontFamily: 'sans-serif',
       fontWeight: 'bold',
-      color: () => `hsl(${Math.random() * 60 + 200}, 70%, 50%)`,
+      color: () => `hsl(${Math.random() * 60 + 200}, 70%, ${themeStore.isDark ? 65 : 50}%)`,
     },
     emphasis: {
       focus: 'self',
-      textStyle: { textShadowBlur: 10, textShadowColor: '#333' },
+      textStyle: { textShadowBlur: 10, textShadowColor: themeStore.isDark ? '#000' : '#333' },
     },
     data: wordCloudData.value.other,
   }],
@@ -132,7 +135,7 @@ const replyDelayData = computed(() => {
 
 const replyDelayOption = computed(() => {
   if (!replyDelayData.value) return {}
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: ['我的回复', '对方回复'] },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
@@ -152,7 +155,7 @@ const replyDelayOption = computed(() => {
         itemStyle: { color: '#2080f0' },
       },
     ],
-  }
+  })
 })
 
 // 消息长度趋势
@@ -163,7 +166,7 @@ const lengthTrendData = computed(() => {
 
 const lengthTrendOption = computed(() => {
   if (!lengthTrendData.value) return {}
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
     legend: { data: ['我', '对方'] },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
@@ -190,7 +193,7 @@ const lengthTrendOption = computed(() => {
         connectNulls: true,
       },
     ],
-  }
+  })
 })
 
 // 日历热力图
@@ -207,7 +210,7 @@ const calendarOption = computed(() => {
   const maxDate = dates[dates.length - 1]
   const data = calendarData.value.map(d => [d.date, d.count])
 
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: {
       formatter: (p: any) => `${p.data[0]}: ${p.data[1]} 条消息`,
     },
@@ -219,7 +222,9 @@ const calendarOption = computed(() => {
       left: 'center',
       bottom: 0,
       inRange: {
-        color: ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'],
+        color: themeStore.isDark
+          ? ['#161b22', '#0e4429', '#006d32', '#26a641', '#39d353']
+          : ['#ebedf0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'],
       },
     },
     calendar: {
@@ -230,7 +235,6 @@ const calendarOption = computed(() => {
       range: [minDate, maxDate],
       itemStyle: {
         borderWidth: 0.5,
-        borderColor: '#fff',
       },
       splitLine: { show: false },
       yearLabel: { show: false },
@@ -247,7 +251,7 @@ const calendarOption = computed(() => {
       coordinateSystem: 'calendar',
       data,
     }],
-  }
+  })
 })
 
 // 情绪分布
@@ -269,18 +273,9 @@ const emotionDistOption = computed(() => {
     { key: 'indifferent', name: '🙄 敷衍', color: '#c0c4cc' },
   ]
 
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
     legend: { data: ['我', '对方'] },
-    radar: {
-      indicator: emotions.map(e => ({ name: e.name, max: 'auto' })),
-      shape: 'polygon',
-      splitNumber: 4,
-      axisName: { color: '#666' },
-      splitLine: { lineStyle: { color: 'rgba(0,0,0,0.1)' } },
-      splitArea: { show: true, areaStyle: { color: ['#fff', '#f5f5f5'] } },
-    },
-    // 使用柱状图代替雷达图（更直观）
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: {
       type: 'category',
@@ -301,7 +296,7 @@ const emotionDistOption = computed(() => {
         itemStyle: { color: '#2080f0' },
       },
     ],
-  }
+  })
 })
 </script>
 
@@ -383,6 +378,7 @@ const emotionDistOption = computed(() => {
 .analysis-header h2 {
   margin: 0;
   font-size: 24px;
+  color: var(--text-color);
 }
 
 .chart-row {

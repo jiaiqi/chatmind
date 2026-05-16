@@ -13,6 +13,8 @@ import {
   TitleComponent, ToolboxComponent,
 } from 'echarts/components'
 import { useSessionStore } from '../stores/session'
+import { useThemeStore } from '../stores/theme'
+import { buildChartOption } from '../utils/chart-theme'
 import { calculateStatistics, formatDuration } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { formatDate } from '../utils/date'
@@ -27,6 +29,7 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const themeStore = useThemeStore()
 const message = useMessage()
 
 const messages = ref<DbMessage[]>([])
@@ -69,7 +72,7 @@ onMounted(loadData)
 const emotionChartOption = computed(() => {
   if (!emotionTrend.value.length) return {}
 
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
     legend: {
       data: ['我-正面', '我-负面', '对方-正面', '对方-负面'],
@@ -115,12 +118,12 @@ const emotionChartOption = computed(() => {
         lineStyle: { type: 'dashed' },
       },
     ],
-  }
+  })
 })
 
 const hourlyChartOption = computed(() => {
   if (!stats.value) return {}
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: {
@@ -133,12 +136,12 @@ const hourlyChartOption = computed(() => {
       data: stats.value.hourlyDistribution,
       itemStyle: { color: '#18a058' },
     }],
-  }
+  })
 })
 
 const ratioChartOption = computed(() => {
   if (!stats.value) return {}
-  return {
+  return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'item' },
     legend: { top: '5%', left: 'center' },
     series: [{
@@ -151,7 +154,7 @@ const ratioChartOption = computed(() => {
         { value: stats.value.otherMessages, name: '对方', itemStyle: { color: '#2080f0' } },
       ],
     }],
-  }
+  })
 })
 </script>
 
@@ -232,10 +235,11 @@ const ratioChartOption = computed(() => {
 .dashboard-header h2 {
   margin: 0;
   font-size: 24px;
+  color: var(--text-color);
 }
 
 .time-range {
-  color: #666;
+  color: var(--text-secondary);
   margin: 4px 0 0;
 }
 

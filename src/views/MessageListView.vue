@@ -171,7 +171,7 @@ function getEmotionTag(emotion?: EmotionLabel) {
 
 .msg-time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-muted);
 }
 
 .msg-content {

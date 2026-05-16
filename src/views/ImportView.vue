@@ -46,7 +46,7 @@ function handleIdentityCancel() {
 <style scoped>
 .import-view {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  background: linear-gradient(135deg, var(--app-bg) 0%, var(--hover-bg) 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -62,14 +62,14 @@ function handleIdentityCancel() {
 .header h1 {
   font-size: 42px;
   font-weight: 700;
-  color: #333;
+  color: var(--text-color);
   margin: 0;
   letter-spacing: -1px;
 }
 
 .subtitle {
   font-size: 18px;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 8px;
 }
 </style>
