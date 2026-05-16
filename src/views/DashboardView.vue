@@ -19,7 +19,9 @@ import { calculateStatistics, formatDuration } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { calculateRelationshipScore } from '../analyzers/relationship-score'
 import { detectDangerSignals } from '../analyzers/danger-signals'
+import { determineRelationshipStage } from '../analyzers/relationship-stage'
 import { formatDate } from '../utils/date'
+import type { RelationshipStageResult } from '../analyzers/relationship-stage'
 import type { StatisticsResult } from '../types/analysis'
 import type { DbMessage } from '../db/schema'
 import type { RelationshipScore } from '../analyzers/relationship-score'
@@ -41,6 +43,7 @@ const stats = ref<StatisticsResult | null>(null)
 const emotionTrend = ref<any[]>([])
 const score = ref<RelationshipScore | null>(null)
 const dangerSignals = ref<DangerSignal[]>([])
+const stage = ref<RelationshipStageResult | null>(null)
 const isLoading = ref(false)
 
 const hasData = computed(() => sessionStore.currentSession !== null)
@@ -67,6 +70,7 @@ async function loadData() {
     emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
     score.value = calculateRelationshipScore(messages.value, stats.value)
     dangerSignals.value = detectDangerSignals(messages.value)
+    stage.value = determineRelationshipStage(messages.value, stats.value)
   } catch (err) {
     message.error('加载数据失败')
   } finally {
@@ -159,6 +163,18 @@ const healthColor = computed(() => {
   return s >= 80 ? '#18a058' : s >= 60 ? '#2080f0' : s >= 40 ? '#f0a020' : '#d03050'
 })
 
+const stageTagType = computed(() => {
+  if (!stage.value) return 'default'
+  const types: Record<string, any> = {
+    '蜜月期': 'error',
+    '稳定期': 'success',
+    '倦怠期': 'warning',
+    '危机期': 'error',
+    '修复期': 'info',
+  }
+  return types[stage.value.stage] || 'default'
+})
+
 const ratioChartOption = computed(() => {
   if (!stats.value) return {}
   return buildChartOption(themeStore.isDark, {
@@ -208,6 +224,37 @@ const ratioChartOption = computed(() => {
           </n-card>
         </n-grid-item>
       </n-grid>
+
+      <!-- 关系阶段 -->
+      <n-card v-if="stage" class="stage-card">
+        <div class="stage-header">
+          <div class="stage-main">
+            <span class="stage-label">当前关系阶段</span>
+            <n-tag
+              size="large"
+              :type="stageTagType"
+              style="font-size: 18px; font-weight: 600; padding: 4px 16px"
+            >
+              {{ stage.stage }}
+            </n-tag>
+          </div>
+          <div class="stage-confidence">
+            置信度 {{ (stage.confidence * 100).toFixed(0) }}%
+          </div>
+        </div>
+        <p class="stage-reasoning">{{ stage.reasoning }}</p>
+        <n-space v-if="stage.keyIndicators.length" size="small" style="margin-top: 12px"
+        >
+          <n-tag
+            v-for="(ind, i) in stage.keyIndicators"
+            :key="i"
+            size="small"
+            :type="ind.impact === 'positive' ? 'success' : ind.impact === 'negative' ? 'warning' : 'default'"
+          >
+            {{ ind.indicator }}: {{ ind.value }}
+          </n-tag>
+        </n-space>
+      </n-card>
 
       <!-- 关系健康度 -->
       <n-card v-if="score" class="health-card">
@@ -361,5 +408,39 @@ const ratioChartOption = computed(() => {
 
 .danger-card {
   margin-bottom: 16px;
+}
+
+.stage-card {
+  margin-bottom: 16px;
+}
+
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.stage-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stage-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.stage-confidence {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stage-reasoning {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 </style>
