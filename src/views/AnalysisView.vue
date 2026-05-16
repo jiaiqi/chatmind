@@ -26,6 +26,7 @@ import {
   calculateEmotionDistribution,
 } from '../analyzers/word-frequency'
 import { formatDuration } from '../analyzers/statistics'
+import { calculateEmotionDynamics } from '../analyzers/emotion-dynamics'
 import { trackKeyword, highlightKeyword } from '../analyzers/keyword-track'
 import type { DbMessage } from '../db/schema'
 import type { KeywordTrendPoint, KeywordMatch } from '../analyzers/keyword-track'
@@ -313,6 +314,12 @@ const emotionDistData = computed(() => {
   return calculateEmotionDistribution(messages.value)
 })
 
+// 情绪动态分析
+const emotionDynamics = computed(() => {
+  if (!messages.value.length) return null
+  return calculateEmotionDynamics(messages.value)
+})
+
 const emotionDistOption = computed(() => {
   if (!emotionDistData.value) return {}
 
@@ -462,6 +469,105 @@ const emotionDistOption = computed(() => {
       <n-card title="情绪分布对比" class="chart-card">
         <v-chart class="chart" :option="emotionDistOption" autoresize />
       </n-card>
+
+      <!-- 情绪动态分析 -->
+      <n-card v-if="emotionDynamics" title="情绪互动模式" class="chart-card">
+        <n-grid :cols="3" :x-gap="16">
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">情绪感染度</div>
+              <div class="dynamics-desc">一方负面情绪后，另一方也出现负面的概率</div>
+              <n-space vertical size="small" style="margin-top: 12px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">我方 → 对方</span>
+                  <n-progress
+                    type="line"
+                    :percentage="Math.round(emotionDynamics.contagion.selfToOther * 100)"
+                    :height="8"
+                    :show-indicator="false"
+                    :color="emotionDynamics.contagion.selfToOther > 0.5 ? '#d03050' : '#18a058'"
+                    style="width: 120px"
+                  />
+                  <span class="dynamics-value">{{ (emotionDynamics.contagion.selfToOther * 100).toFixed(0) }}%</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">对方 → 我方</span>
+                  <n-progress
+                    type="line"
+                    :percentage="Math.round(emotionDynamics.contagion.otherToSelf * 100)"
+                    :height="8"
+                    :show-indicator="false"
+                    :color="emotionDynamics.contagion.otherToSelf > 0.5 ? '#d03050' : '#18a058'"
+                    style="width: 120px"
+                  />
+                  <span class="dynamics-value">{{ (emotionDynamics.contagion.otherToSelf * 100).toFixed(0) }}%</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">总体感染率</span>
+                  <n-progress
+                    type="line"
+                    :percentage="Math.round(emotionDynamics.contagion.overall * 100)"
+                    :height="8"
+                    :show-indicator="false"
+                    :color="emotionDynamics.contagion.overall > 0.5 ? '#d03050' : '#18a058'"
+                    style="width: 120px"
+                  />
+                  <span class="dynamics-value">{{ (emotionDynamics.contagion.overall * 100).toFixed(0) }}%</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">情绪修复时间</div>
+              <div class="dynamics-desc">负面事件结束后，恢复正面交流的平均时间</div>
+              <div class="dynamics-metric" style="margin-top: 12px">
+                <div class="dynamics-metric-value">{{ emotionDynamics.recovery.avgRecoveryTimeText }}</div>
+                <div class="dynamics-metric-label">平均修复时间</div>
+              </div>
+              <n-space vertical size="small" style="margin-top: 8px">
+                <n-tag size="small" type="info"
+                  >修复事件: {{ emotionDynamics.recovery.recoveryCount }}</n-tag
+                >
+                <n-tag
+                  v-if="emotionDynamics.recovery.unresolvedCount > 0"
+                  size="small"
+                  type="warning"
+                >
+                  未修复: {{ emotionDynamics.recovery.unresolvedCount }}
+                </n-tag>
+              </n-space>
+            </div>
+          </n-grid-item>
+
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">情绪对抗模式</div>
+              <div class="dynamics-desc">双方负面情绪交替出现的情况</div>
+              <n-space vertical size="small" style="margin-top: 12px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">升级事件</span>
+                  <span class="dynamics-value" :style="{ color: emotionDynamics.confrontation.escalationCount > 0 ? '#d03050' : '#18a058' }"
+                    >{{ emotionDynamics.confrontation.escalationCount }} 次</span
+                  >
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">降级/安抚</span>
+                  <span class="dynamics-value" style="color: #18a058"
+                    >{{ emotionDynamics.confrontation.deEscalationCount }} 次</span
+                  >
+                </div>
+                <div class="dynamics-row" v-if="emotionDynamics.confrontation.escalationCount > 0"
+                >
+                  <span class="dynamics-label">平均升级轮次</span>
+                  <span class="dynamics-value">{{ emotionDynamics.confrontation.avgEscalationRounds.toFixed(1) }} 轮</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+        </n-grid>
+      </n-card>
     </template>
 
     <n-empty v-else description="暂无数据，请先导入聊天记录">
@@ -509,6 +615,60 @@ const emotionDistOption = computed(() => {
 
 .calendar-chart {
   height: 220px;
+}
+
+.dynamics-section {
+  padding: 8px;
+}
+
+.dynamics-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.dynamics-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.dynamics-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.dynamics-label {
+  color: var(--text-secondary);
+  min-width: 72px;
+}
+
+.dynamics-value {
+  font-weight: 500;
+  color: var(--text-color);
+  min-width: 48px;
+  text-align: right;
+}
+
+.dynamics-metric {
+  text-align: center;
+  padding: 8px;
+  background: var(--hover-bg);
+  border-radius: 8px;
+}
+
+.dynamics-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.dynamics-metric-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 
 .keyword-input-row {
