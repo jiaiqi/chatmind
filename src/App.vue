@@ -7,6 +7,7 @@ import ImportView from './views/ImportView.vue'
 import DashboardView from './views/DashboardView.vue'
 import TimelineView from './views/TimelineView.vue'
 import MessageListView from './views/MessageListView.vue'
+import AiChatView from './views/AiChatView.vue'
 
 const sessionStore = useSessionStore()
 const activeView = ref('dashboard')
@@ -44,9 +45,7 @@ function handleDeleteSession(sessionId: string) {
           <DashboardView v-if="activeView === 'dashboard'" />
           <TimelineView v-else-if="activeView === 'timeline'" />
           <MessageListView v-else-if="activeView === 'messages'" />
-          <div v-else-if="activeView === 'ai'" style="padding: 40px; text-align: center">
-            <n-empty description="AI 分析师功能开发中..." />
-          </div>
+          <AiChatView v-else-if="activeView === 'ai'" />
           <ImportView v-else-if="activeView === 'import'" />
         </AppLayout>
 
