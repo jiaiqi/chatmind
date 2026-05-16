@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import {
-  NCard, NInput, NButton, NSpace, NEmpty,
+  NInput, NButton, NSpace, NEmpty,
   NAvatar, NSpin, NDivider, NIcon,
-  NForm, NFormItem, NSelect, useMessage,
+  NTag, useMessage,
 } from 'naive-ui'
-import { SparklesOutline, SendOutline, TrashOutline, PersonOutline } from '@vicons/ionicons5'
+import { SparklesOutline, SendOutline, TrashOutline, PersonOutline, SettingsOutline } from '@vicons/ionicons5'
 import { useAiStore } from '../stores/ai'
+import { useModelConfigStore } from '../stores/model-config'
+import ModelConfigDialog from '../components/ModelConfig/ModelConfigDialog.vue'
 
 const aiStore = useAiStore()
+const modelConfig = useModelConfigStore()
 const message = useMessage()
 
 const inputValue = ref('')
 const chatContainer = ref<HTMLDivElement | null>(null)
-const showConfig = ref(false)
+const showConfigDialog = ref(false)
 
 const quickQuestions = [
   '最近我们的关系怎么样？',
@@ -23,14 +26,14 @@ const quickQuestions = [
   '怎么改善我们的关系？',
 ]
 
-const modelOptions = [
-  { label: 'DeepSeek V3', value: 'deepseek-chat' },
-  { label: 'DeepSeek R1', value: 'deepseek-reasoner' },
-]
-
 async function handleSend() {
   const content = inputValue.value.trim()
   if (!content || aiStore.isGenerating) return
+
+  if (!modelConfig.activeSetting) {
+    showConfigDialog.value = true
+    return
+  }
 
   inputValue.value = ''
 
@@ -49,6 +52,10 @@ async function handleSend() {
 }
 
 function handleQuickQuestion(question: string) {
+  if (!modelConfig.activeSetting) {
+    showConfigDialog.value = true
+    return
+  }
   inputValue.value = question
   handleSend()
 }
@@ -74,48 +81,44 @@ function handleKeydown(e: KeyboardEvent) {
 <template>
   <div class="ai-chat-view">
     <div class="chat-container" ref="chatContainer">
-      <!-- 配置面板 -->
-      <n-card v-if="!aiStore.isConfigured || showConfig" size="small" class="config-card">
-        <template #header>
-          <n-space align="center">
-            <n-icon :component="SparklesOutline" />
-            <span>AI 配置</span>
-          </n-space>
-        </template>
-        <n-form label-placement="left" label-width="80">
-          <n-form-item label="API Key">
-            <n-input
-              v-model:value="aiStore.config.apiKey"
-              type="password"
-              placeholder="输入你的 DeepSeek API Key"
-              show-password-on="mousedown"
-              @blur="aiStore.setApiKey(aiStore.config.apiKey)"
-            />
-          </n-form-item>
-          <n-form-item label="模型">
-            <n-select
-              v-model:value="aiStore.config.model"
-              :options="modelOptions"
-              @update:value="aiStore.setModel"
-            />
-          </n-form-item>
-        </n-form>
-        <n-text depth="3" style="font-size: 12px">
-          数据仅用于调用 AI API，不会上传到我们的服务器。
-          <a href="https://platform.deepseek.com/" target="_blank">获取 DeepSeek API Key</a>
-        </n-text>
-      </n-card>
+      <!-- 未配置提示 -->
+      <div v-if="!modelConfig.hasAnyConfig" class="empty-state">
+        <n-empty description="AI 关系分析师">
+          <template #icon>
+            <n-icon size="48" :component="SparklesOutline" />
+          </template>
+          <template #extra>
+            <n-space vertical align="center">
+              <n-text depth="2">请先配置 AI 模型</n-text>
+              <n-button type="primary" @click="showConfigDialog = true">
+                配置模型
+              </n-button>
+            </n-space>
+          </template>
+        </n-empty>
+      </div>
 
-      <!-- 空状态 -->
-      <div v-if="aiStore.messages.length === 0" class="empty-state">
+      <!-- 空对话状态 -->
+      <div v-else-if="aiStore.messages.length === 0" class="empty-state">
         <n-empty description="AI 关系分析师">
           <template #icon>
             <n-icon size="48" :component="SparklesOutline" />
           </template>
           <template #extra>
             <div class="quick-questions">
-              <n-text depth="2">试试这些问题：</n-text>
-              <n-space style="margin-top: 12px" wrap>
+              <n-space style="margin-top: 12px" align="center" justify="center">
+                <n-tag type="success" size="small">
+                  当前: {{ aiStore.activeModelName }}
+                </n-tag>
+                <n-button text size="small" @click="showConfigDialog = true">
+                  <n-icon :component="SettingsOutline" />
+                  切换模型
+                </n-button>
+              </n-space>
+              <n-text depth="2" style="display: block; margin-top: 16px">
+                试试这些问题：
+              </n-text>
+              <n-space style="margin-top: 12px" wrap justify="center">
                 <n-button
                   v-for="q in quickQuestions"
                   :key="q"
@@ -159,8 +162,8 @@ function handleKeydown(e: KeyboardEvent) {
     <div class="input-area">
       <n-divider style="margin: 0 0 12px" />
       <n-space align="center" style="width: 100%">
-        <n-button text size="small" @click="showConfig = !showConfig">
-          <n-icon :component="SparklesOutline" />
+        <n-button text size="small" @click="showConfigDialog = true" title="模型配置">
+          <n-icon :component="SettingsOutline" />
         </n-button>
         <n-button
           text
@@ -181,13 +184,20 @@ function handleKeydown(e: KeyboardEvent) {
         <n-button
           type="primary"
           circle
-          :disabled="!inputValue.trim() || aiStore.isGenerating || !aiStore.isConfigured"
+          :disabled="!inputValue.trim() || aiStore.isGenerating"
           @click="handleSend"
         >
           <n-icon :component="SendOutline" />
         </n-button>
       </n-space>
+      <div v-if="modelConfig.hasAnyConfig" class="model-indicator">
+        <n-tag size="small" type="info">
+          {{ aiStore.activeModelName }}
+        </n-tag>
+      </div>
     </div>
+
+    <ModelConfigDialog v-model:show="showConfigDialog" />
   </div>
 </template>
 
@@ -204,10 +214,6 @@ function handleKeydown(e: KeyboardEvent) {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-}
-
-.config-card {
-  margin-bottom: 16px;
 }
 
 .empty-state {
@@ -262,5 +268,10 @@ function handleKeydown(e: KeyboardEvent) {
 .input-area {
   padding: 0 24px 24px;
   background: #fff;
+}
+
+.model-indicator {
+  margin-top: 8px;
+  text-align: center;
 }
 </style>

@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AiClient } from '../ai/client'
+import { useModelConfigStore } from './model-config'
 import { useSessionStore } from './session'
 import { calculateStatistics } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { formatDate } from '../utils/date'
-import type { AiMessage, AiConfig } from '../ai/client'
+import type { AiMessage } from '../ai/client'
 
 export interface ChatMessage {
   id: string
@@ -16,31 +17,22 @@ export interface ChatMessage {
 
 export const useAiStore = defineStore('ai', () => {
   const sessionStore = useSessionStore()
-
-  const config = ref<AiConfig>({
-    provider: 'deepseek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: localStorage.getItem('chatmind_api_key') || '',
-    model: 'deepseek-chat',
-  })
+  const modelConfig = useModelConfigStore()
 
   const messages = ref<ChatMessage[]>([])
   const isGenerating = ref(false)
+  const error = ref<string | null>(null)
 
-  const isConfigured = computed(() => !!config.value.apiKey)
+  const isConfigured = computed(() =>
+    modelConfig.hasAnyConfig && !!modelConfig.activeSetting
+  )
 
-  function setApiKey(key: string) {
-    config.value.apiKey = key
-    localStorage.setItem('chatmind_api_key', key)
-  }
-
-  function setModel(model: string) {
-    config.value.model = model
-  }
-
-  function setBaseUrl(url: string) {
-    config.value.baseUrl = url
-  }
+  const activeModelName = computed(() => {
+    const model = modelConfig.activeModel
+    const provider = modelConfig.activeProvider
+    if (!model || !provider) return '未配置'
+    return `${provider.name} / ${model.name}`
+  })
 
   function clearHistory() {
     messages.value = []
@@ -87,11 +79,20 @@ ${trendSummary}
   }
 
   async function sendMessage(userContent: string, onChunk?: (chunk: string) => void) {
-    if (!config.value.apiKey) {
-      throw new Error('请先配置 API Key')
+    error.value = null
+
+    const aiConfig = modelConfig.getAiConfig()
+    if (!aiConfig) {
+      throw new Error('请先配置 AI 模型')
     }
 
-    const client = new AiClient(config.value)
+    const client = new AiClient({
+      baseUrl: aiConfig.baseUrl,
+      apiKey: aiConfig.apiKey,
+      model: aiConfig.model,
+      extraHeaders: aiConfig.extraHeaders,
+      provider: aiConfig.provider,
+    })
 
     const systemPrompt = await buildSystemPrompt()
     const history: AiMessage[] = [
@@ -128,6 +129,7 @@ ${trendSummary}
     } catch (err: any) {
       assistantMsg.content = `出错了: ${err.message}`
       assistantMsg.isStreaming = false
+      error.value = err.message
       throw err
     } finally {
       isGenerating.value = false
@@ -135,13 +137,11 @@ ${trendSummary}
   }
 
   return {
-    config,
     messages,
     isGenerating,
+    error,
     isConfigured,
-    setApiKey,
-    setModel,
-    setBaseUrl,
+    activeModelName,
     clearHistory,
     addMessage,
     sendMessage,
