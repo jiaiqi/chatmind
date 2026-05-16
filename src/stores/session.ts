@@ -88,8 +88,9 @@ export const useSessionStore = defineStore('session', () => {
     messageId: string,
     emotion: EmotionLabel,
     score: number,
+    method: 'rule' | 'user' = 'user',
   ) {
-    await db.messages.update(messageId, { emotion, emotionScore: score })
+    await db.messages.update(messageId, { emotion, emotionScore: score, emotionMethod: method })
   }
 
   async function getParticipants(sessionId: string) {

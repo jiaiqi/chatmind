@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NTimeline, NTimelineItem, NTag, NEmpty,
-  NSpace, NButton, useMessage,
+  NSpace, NButton, useMessage, NPopover,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -35,6 +35,7 @@ const messages = ref<DbMessage[]>([])
 const emotionTrend = ref<any[]>([])
 const selectedDate = ref<string | null>(null)
 const selectedMessages = ref<DbMessage[]>([])
+const correctingMsgId = ref<string | null>(null)
 
 const emotionColors: Record<EmotionLabel, string> = {
   positive: '#18a058',
@@ -54,6 +55,43 @@ const emotionLabels: Record<string, string> = {
   sad: '😢',
   affectionate: '💕',
   indifferent: '🙄',
+}
+
+const emotionFullLabels: Record<string, string> = {
+  positive: '😊 正面',
+  negative: '😟 负面',
+  neutral: '😐 中性',
+  angry: '😡 愤怒',
+  sad: '😢 悲伤',
+  affectionate: '💕 亲昵',
+  indifferent: '🙄 敷衍',
+}
+
+const allEmotions: EmotionLabel[] = ['positive', 'negative', 'neutral', 'angry', 'sad', 'affectionate', 'indifferent']
+
+async function handleEmotionChange(msgId: string, newEmotion: EmotionLabel) {
+  correctingMsgId.value = null
+  try {
+    await sessionStore.updateMessageEmotion(msgId, newEmotion, 0.95, 'user')
+    // 更新本地数据
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg) {
+      msg.emotion = newEmotion
+      msg.emotionScore = 0.95
+      msg.emotionMethod = 'user'
+    }
+    const selMsg = selectedMessages.value.find(m => m.id === msgId)
+    if (selMsg) {
+      selMsg.emotion = newEmotion
+      selMsg.emotionScore = 0.95
+      selMsg.emotionMethod = 'user'
+    }
+    // 重新计算情绪趋势
+    emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
+    message.success('情绪标签已更新')
+  } catch {
+    message.error('更新失败')
+  }
 }
 
 async function loadData() {
@@ -185,13 +223,39 @@ function getEmotionTag(emotion?: EmotionLabel) {
             <n-space align="center" size="small">
               <span class="sender-label">{{ msg.isSelf ? '我' : '对方' }}</span>
               <span class="msg-time">{{ formatDateTime(msg.timestamp) }}</span>
-              <n-tag
-                v-if="getEmotionTag(msg.emotion)"
-                size="small"
-                :color="{ textColor: getEmotionTag(msg.emotion)?.color, borderColor: getEmotionTag(msg.emotion)?.color }"
+              <n-popover
+                trigger="click"
+                placement="bottom"
+                :show="correctingMsgId === msg.id"
+                @update:show="(v: boolean) => { if (!v) correctingMsgId = null }"
               >
-                {{ getEmotionTag(msg.emotion)?.label }}
-              </n-tag>
+                <template #trigger>
+                  <n-tag
+                    v-if="getEmotionTag(msg.emotion)"
+                    size="small"
+                    :color="{ textColor: getEmotionTag(msg.emotion)?.color, borderColor: getEmotionTag(msg.emotion)?.color }"
+                    style="cursor: pointer"
+                    @click="correctingMsgId = msg.id"
+                  >
+                    {{ getEmotionTag(msg.emotion)?.label }}
+                    <span v-if="msg.emotionMethod === 'user'" style="opacity: 0.6; margin-left: 2px">✎</span>
+                  </n-tag>
+                </template>
+                <div class="emotion-picker">
+                  <div class="emotion-picker-title">修正情绪标签</div>
+                  <div class="emotion-picker-grid">
+                    <n-button
+                      v-for="emo in allEmotions"
+                      :key="emo"
+                      size="small"
+                      :type="msg.emotion === emo ? 'primary' : 'default'"
+                      @click="handleEmotionChange(msg.id, emo)"
+                    >
+                      {{ emotionFullLabels[emo] }}
+                    </n-button>
+                  </div>
+                </div>
+              </n-popover>
             </n-space>
           </template>
           <div class="msg-content">{{ msg.content }}</div>
@@ -237,5 +301,23 @@ function getEmotionTag(emotion?: EmotionLabel) {
   word-break: break-word;
   line-height: 1.6;
   margin-top: 4px;
+}
+
+.emotion-picker {
+  padding: 8px;
+  min-width: 200px;
+}
+
+.emotion-picker-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-color);
+}
+
+.emotion-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
 }
 </style>

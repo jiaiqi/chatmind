@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NList, NListItem, NThing, NPagination,
-  NTag, NEmpty, NSpace, NSelect, useMessage,
+  NTag, NEmpty, NSpace, NSelect, useMessage, NPopover,
 } from 'naive-ui'
 import { useSessionStore } from '../stores/session'
 import { db } from '../db/schema'
@@ -41,6 +41,19 @@ const emotionLabels: Record<string, string> = {
   affectionate: '💕 亲昵',
   indifferent: '🙄 敷衍',
 }
+
+const emotionFullLabels: Record<string, string> = {
+  positive: '😊 正面',
+  negative: '😟 负面',
+  neutral: '😐 中性',
+  angry: '😡 愤怒',
+  sad: '😢 悲伤',
+  affectionate: '💕 亲昵',
+  indifferent: '🙄 敷衍',
+}
+
+const allEmotions: EmotionLabel[] = ['positive', 'negative', 'neutral', 'angry', 'sad', 'affectionate', 'indifferent']
+const correctingMsgId = ref<string | null>(null)
 
 const senderOptions = computed(() => [
   { label: '全部', value: '' },
@@ -97,6 +110,22 @@ function getEmotionTag(emotion?: EmotionLabel) {
     color: emotionColors[emotion] || '#909399',
   }
 }
+
+async function handleEmotionChange(msgId: string, newEmotion: EmotionLabel) {
+  correctingMsgId.value = null
+  try {
+    await sessionStore.updateMessageEmotion(msgId, newEmotion, 0.95, 'user')
+    const msg = messages.value.find(m => m.id === msgId)
+    if (msg) {
+      msg.emotion = newEmotion
+      msg.emotionScore = 0.95
+      msg.emotionMethod = 'user'
+    }
+    message.success('情绪标签已更新')
+  } catch {
+    message.error('更新失败')
+  }
+}
 </script>
 
 <template>
@@ -133,13 +162,39 @@ function getEmotionTag(emotion?: EmotionLabel) {
                   {{ msg.isSelf ? '我' : '对方' }}
                 </n-tag>
                 <span class="msg-time">{{ formatDateTime(msg.timestamp) }}</span>
-                <n-tag
-                  v-if="getEmotionTag(msg.emotion)"
-                  size="small"
-                  :color="{ textColor: getEmotionTag(msg.emotion)?.color, borderColor: getEmotionTag(msg.emotion)?.color }"
+                <n-popover
+                  trigger="click"
+                  placement="bottom"
+                  :show="correctingMsgId === msg.id"
+                  @update:show="(v: boolean) => { if (!v) correctingMsgId = null }"
                 >
-                  {{ getEmotionTag(msg.emotion)?.label }}
-                </n-tag>
+                  <template #trigger>
+                    <n-tag
+                      v-if="getEmotionTag(msg.emotion)"
+                      size="small"
+                      :color="{ textColor: getEmotionTag(msg.emotion)?.color, borderColor: getEmotionTag(msg.emotion)?.color }"
+                      style="cursor: pointer"
+                      @click="correctingMsgId = msg.id"
+                    >
+                      {{ getEmotionTag(msg.emotion)?.label }}
+                      <span v-if="msg.emotionMethod === 'user'" style="opacity: 0.6; margin-left: 2px">✎</span>
+                    </n-tag>
+                  </template>
+                  <div class="emotion-picker">
+                    <div class="emotion-picker-title">修正情绪标签</div>
+                    <div class="emotion-picker-grid">
+                      <n-button
+                        v-for="emo in allEmotions"
+                        :key="emo"
+                        size="small"
+                        :type="msg.emotion === emo ? 'primary' : 'default'"
+                        @click="handleEmotionChange(msg.id, emo)"
+                      >
+                        {{ emotionFullLabels[emo] }}
+                      </n-button>
+                    </div>
+                  </div>
+                </n-popover>
               </n-space>
             </template>
             <template #description>
@@ -185,5 +240,23 @@ function getEmotionTag(emotion?: EmotionLabel) {
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+.emotion-picker {
+  padding: 8px;
+  min-width: 200px;
+}
+
+.emotion-picker-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-color);
+}
+
+.emotion-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
 }
 </style>

@@ -11,6 +11,7 @@ export interface DbMessage {
   type: MessageType
   emotion?: EmotionLabel
   emotionScore?: number
+  emotionMethod?: 'rule' | 'user'
   wordCount: number
 }
 
