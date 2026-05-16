@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NGrid, NGridItem, NStatistic, NDivider,
-  NButton, NEmpty, useMessage,
+  NButton, NEmpty, NProgress, NAlert, NSpace, NTag, useMessage,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -17,9 +17,13 @@ import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
 import { calculateStatistics, formatDuration } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
+import { calculateRelationshipScore } from '../analyzers/relationship-score'
+import { detectDangerSignals } from '../analyzers/danger-signals'
 import { formatDate } from '../utils/date'
 import type { StatisticsResult } from '../types/analysis'
 import type { DbMessage } from '../db/schema'
+import type { RelationshipScore } from '../analyzers/relationship-score'
+import type { DangerSignal } from '../types/analysis'
 
 use([
   CanvasRenderer,
@@ -35,6 +39,8 @@ const message = useMessage()
 const messages = ref<DbMessage[]>([])
 const stats = ref<StatisticsResult | null>(null)
 const emotionTrend = ref<any[]>([])
+const score = ref<RelationshipScore | null>(null)
+const dangerSignals = ref<DangerSignal[]>([])
 const isLoading = ref(false)
 
 const hasData = computed(() => sessionStore.currentSession !== null)
@@ -59,6 +65,8 @@ async function loadData() {
     messages.value = await sessionStore.getMessagesByTimeRange(sessionId, 0, Date.now())
     stats.value = calculateStatistics(messages.value)
     emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
+    score.value = calculateRelationshipScore(messages.value, stats.value)
+    dangerSignals.value = detectDangerSignals(messages.value)
   } catch (err) {
     message.error('加载数据失败')
   } finally {
@@ -139,6 +147,18 @@ const hourlyChartOption = computed(() => {
   })
 })
 
+const healthScoreClass = computed(() => {
+  if (!score.value) return ''
+  const s = score.value.total
+  return s >= 80 ? 'health-good' : s >= 60 ? 'health-normal' : s >= 40 ? 'health-warning' : 'health-bad'
+})
+
+const healthColor = computed(() => {
+  if (!score.value) return '#18a058'
+  const s = score.value.total
+  return s >= 80 ? '#18a058' : s >= 60 ? '#2080f0' : s >= 40 ? '#f0a020' : '#d03050'
+})
+
 const ratioChartOption = computed(() => {
   if (!stats.value) return {}
   return buildChartOption(themeStore.isDark, {
@@ -188,6 +208,53 @@ const ratioChartOption = computed(() => {
           </n-card>
         </n-grid-item>
       </n-grid>
+
+      <!-- 关系健康度 -->
+      <n-card v-if="score" class="health-card">
+        <div class="health-header">
+          <span class="health-label">关系健康度</span>
+          <span class="health-score" :class="healthScoreClass">{{ score.total }}分</span>
+        </div>
+        <n-progress
+          type="line"
+          :percentage="score.total"
+          :color="healthColor"
+          :height="12"
+          :show-indicator="false"
+        />
+        <p class="health-desc">{{ score.interpretation }}</p>
+        <n-space v-if="score.total > 0" size="small" style="margin-top: 8px">
+          <n-tag size="small" :type="score.breakdown.balance >= 60 ? 'success' : 'warning'"
+            >平衡 {{ score.breakdown.balance }}</n-tag
+          >
+          <n-tag size="small" :type="score.breakdown.positivity >= 60 ? 'success' : 'warning'"
+            >正向 {{ score.breakdown.positivity }}</n-tag
+          >
+          <n-tag size="small" :type="score.breakdown.responsiveness >= 60 ? 'success' : 'warning'"
+            >及时 {{ score.breakdown.responsiveness }}</n-tag
+          >
+          <n-tag size="small" :type="score.breakdown.consistency >= 60 ? 'success' : 'warning'"
+            >稳定 {{ score.breakdown.consistency }}</n-tag
+          >
+          <n-tag size="small" :type="score.breakdown.depth >= 60 ? 'success' : 'warning'"
+            >深度 {{ score.breakdown.depth }}</n-tag
+          >
+        </n-space>
+      </n-card>
+
+      <!-- 危险信号 -->
+      <n-card v-if="dangerSignals.length > 0" title="⚠️ 关系预警信号" class="danger-card">
+        <n-space vertical>
+          <n-alert
+            v-for="(signal, i) in dangerSignals"
+            :key="i"
+            :type="signal.severity === 'high' ? 'error' : 'warning'"
+            :title="signal.signal"
+          >
+            {{ signal.evidence }}
+          </n-alert>
+        </n-space>
+      </n-card>
 
       <n-divider />
 
@@ -257,5 +324,42 @@ const ratioChartOption = computed(() => {
 
 .bottom-charts {
   margin-top: 16px;
+}
+
+.health-card {
+  margin-bottom: 16px;
+}
+
+.health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.health-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.health-score {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.health-good { color: #18a058; }
+.health-normal { color: #2080f0; }
+.health-warning { color: #f0a020; }
+.health-bad { color: #d03050; }
+
+.health-desc {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.danger-card {
+  margin-bottom: 16px;
 }
 </style>

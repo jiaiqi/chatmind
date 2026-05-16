@@ -33,15 +33,31 @@ export function calculateStatistics(messages: DbMessage[]): StatisticsResult {
     }
   }
 
-  // 回复延迟计算
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]
-    const curr = sorted[i]
-    if (prev.isSelf !== curr.isSelf) {
-      const delay = curr.timestamp - prev.timestamp
-      // 过滤超过 24 小时的延迟（不认为是回复）
-      if (delay < 24 * 60 * 60 * 1000) {
-        replyDelays.push(delay)
+  // 按对话轮次计算回复延迟
+  // 轮次 = 同一发送者的连续消息
+  const turnEnds: { timestamp: number; isSelf: boolean }[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i === sorted.length - 1 || sorted[i].isSelf !== sorted[i + 1].isSelf) {
+      turnEnds.push({ timestamp: sorted[i].timestamp, isSelf: sorted[i].isSelf })
+    }
+  }
+
+  const selfReplyDelays: number[] = []
+  const otherReplyDelays: number[] = []
+
+  for (let i = 1; i < turnEnds.length; i++) {
+    // 当前轮次第一条 = 上一轮次结束后紧接着的消息
+    // 由于我们只记录了轮次结束点，用当前轮次结束 - 上一轮次结束来近似
+    // 但实际上更准确的是：当前轮次起点 - 上一轮次终点
+    // 当前轮次起点 = sorted 中 isSelf 切换后的第一条
+    // 简化：用 turnEnds[i-1] 和 turnEnds[i] 之间的间隔
+    const delay = turnEnds[i].timestamp - turnEnds[i - 1].timestamp
+    if (delay < 24 * 60 * 60 * 1000) {
+      replyDelays.push(delay)
+      if (turnEnds[i].isSelf) {
+        selfReplyDelays.push(delay)
+      } else {
+        otherReplyDelays.push(delay)
       }
     }
   }
@@ -49,6 +65,12 @@ export function calculateStatistics(messages: DbMessage[]): StatisticsResult {
   const totalMessages = sorted.length
   const avgReplyDelay = replyDelays.length > 0
     ? replyDelays.reduce((a, b) => a + b, 0) / replyDelays.length
+    : 0
+  const avgSelfReplyDelay = selfReplyDelays.length > 0
+    ? selfReplyDelays.reduce((a, b) => a + b, 0) / selfReplyDelays.length
+    : 0
+  const avgOtherReplyDelay = otherReplyDelays.length > 0
+    ? otherReplyDelays.reduce((a, b) => a + b, 0) / otherReplyDelays.length
     : 0
 
   return {
@@ -68,6 +90,8 @@ export function calculateStatistics(messages: DbMessage[]): StatisticsResult {
     },
     replyDelays,
     avgReplyDelay,
+    avgSelfReplyDelay,
+    avgOtherReplyDelay,
   }
 }
 

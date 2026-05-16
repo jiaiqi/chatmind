@@ -9,6 +9,8 @@ export interface StatisticsResult {
   maxLength: { self: number; other: number }
   replyDelays: number[]
   avgReplyDelay: number
+  avgSelfReplyDelay: number
+  avgOtherReplyDelay: number
 }
 
 export interface EmotionResult {
