@@ -33,28 +33,27 @@ export function calculateStatistics(messages: DbMessage[]): StatisticsResult {
     }
   }
 
-  // 按对话轮次计算回复延迟
-  // 轮次 = 同一发送者的连续消息
-  const turnEnds: { timestamp: number; isSelf: boolean }[] = []
+  const turnBoundaries: { firstTimestamp: number; lastTimestamp: number; isSelf: boolean }[] = []
+  let turnStart = 0
   for (let i = 0; i < sorted.length; i++) {
     if (i === sorted.length - 1 || sorted[i].isSelf !== sorted[i + 1].isSelf) {
-      turnEnds.push({ timestamp: sorted[i].timestamp, isSelf: sorted[i].isSelf })
+      turnBoundaries.push({
+        firstTimestamp: sorted[turnStart].timestamp,
+        lastTimestamp: sorted[i].timestamp,
+        isSelf: sorted[i].isSelf,
+      })
+      turnStart = i + 1
     }
   }
 
   const selfReplyDelays: number[] = []
   const otherReplyDelays: number[] = []
 
-  for (let i = 1; i < turnEnds.length; i++) {
-    // 当前轮次第一条 = 上一轮次结束后紧接着的消息
-    // 由于我们只记录了轮次结束点，用当前轮次结束 - 上一轮次结束来近似
-    // 但实际上更准确的是：当前轮次起点 - 上一轮次终点
-    // 当前轮次起点 = sorted 中 isSelf 切换后的第一条
-    // 简化：用 turnEnds[i-1] 和 turnEnds[i] 之间的间隔
-    const delay = turnEnds[i].timestamp - turnEnds[i - 1].timestamp
-    if (delay < 24 * 60 * 60 * 1000) {
+  for (let i = 1; i < turnBoundaries.length; i++) {
+    const delay = turnBoundaries[i].firstTimestamp - turnBoundaries[i - 1].lastTimestamp
+    if (delay >= 0 && delay < 24 * 60 * 60 * 1000) {
       replyDelays.push(delay)
-      if (turnEnds[i].isSelf) {
+      if (turnBoundaries[i].isSelf) {
         selfReplyDelays.push(delay)
       } else {
         otherReplyDelays.push(delay)

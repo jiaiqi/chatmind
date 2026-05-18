@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NUpload, NUploadDragger, NText, NIcon, NButton, useMessage } from 'naive-ui'
-import { ArchiveOutline as ArchiveIcon, PlayOutline } from '@vicons/ionicons5'
+import { NUpload, NUploadDragger, NText, NIcon, NButton, NInput, NCollapse, NCollapseItem, useMessage } from 'naive-ui'
+import { ArchiveOutline as ArchiveIcon, PlayOutline, CloudDownloadOutline } from '@vicons/ionicons5'
 import { useImportStore } from '../../stores/import'
 import { useIdentityStore } from '../../stores/identity'
 import { useSessionStore } from '../../stores/session'
 import { parseFile } from '../../parsers'
+import { checkWeFlowApi, fetchWeFlowSessions, fetchWeFlowMessages } from '../../parsers/weflow-api'
 import { analyzeBatchEmotion } from '../../analyzers/emotion'
 import { generateDemoMessages, getDemoParticipants } from '../../utils/demo-data'
 
@@ -17,6 +18,57 @@ const message = useMessage()
 const router = useRouter()
 
 const isDragging = ref(false)
+const weflowUrl = ref('http://127.0.0.1:5031')
+const weflowChecking = ref(false)
+const weflowAvailable = ref(false)
+const weflowSessions = ref<any[]>([])
+const weflowLoading = ref(false)
+
+async function checkWeFlow() {
+  weflowChecking.value = true
+  try {
+    weflowAvailable.value = await checkWeFlowApi(weflowUrl.value)
+    if (weflowAvailable.value) {
+      weflowSessions.value = await fetchWeFlowSessions(weflowUrl.value)
+      message.success(`已连接 WeFlow，发现 ${weflowSessions.value.length} 个会话`)
+    } else {
+      message.warning('无法连接 WeFlow API，请确认服务已启动')
+    }
+  } catch (err: any) {
+    weflowAvailable.value = false
+    message.error(err.message || '连接 WeFlow 失败')
+  } finally {
+    weflowChecking.value = false
+  }
+}
+
+async function importFromWeFlow(sessionId: string) {
+  weflowLoading.value = true
+  importStore.reset()
+  identityStore.reset()
+  importStore.setParsing(true)
+
+  try {
+    const result = await fetchWeFlowMessages(weflowUrl.value, sessionId)
+    importStore.setParseResults([result])
+
+    for (const msg of result.messages) {
+      if (msg.type === 'system') {
+        const selfIndicators = ['你已添加', '你邀请', '你修改', '你撤回']
+        if (selfIndicators.some(ind => msg.content.includes(ind))) {
+          identityStore.inferredSelf.push(msg.senderName)
+        }
+      }
+    }
+
+    importStore.setProgress(100)
+  } catch (err: any) {
+    importStore.setError(err.message || '从 WeFlow 导入失败')
+    message.error(err.message || '从 WeFlow 导入失败')
+  } finally {
+    weflowLoading.value = false
+  }
+}
 
 async function handleFileChange(fileList: File[]) {
   if (!fileList.length) return
@@ -189,7 +241,7 @@ defineExpose({ confirmAndImport })
       multiple
       :show-file-list="false"
       @change="(options: any) => handleFileChange(options.fileList.map((f: any) => f.file))"
-      accept=".json,.csv,.txt"
+      accept=".json,.csv,.txt,.jsonl"
     >
       <n-upload-dragger
         @dragenter="isDragging = true"
@@ -205,7 +257,7 @@ defineExpose({ confirmAndImport })
           拖拽聊天记录文件到此处，或点击上传
         </n-text>
         <n-p depth="3" style="margin-top: 8px">
-          支持: JSON, CSV, TXT 格式（推荐 WeFlow 导出）
+          支持: JSON, CSV, TXT, JSONL 格式（推荐 WeFlow / ChatLab 导出）
         </n-p>
       </n-upload-dragger>
     </n-upload>
@@ -226,6 +278,54 @@ defineExpose({ confirmAndImport })
       </template>
       使用示例数据体验（恋爱故事）
     </n-button>
+
+    <div class="divider">
+      <span class="divider-text">或</span>
+    </div>
+
+    <n-collapse>
+      <n-collapse-item title="从 WeFlow API 导入" name="weflow">
+        <template #header-extra>
+          <n-icon><cloud-download-outline /></n-icon>
+        </template>
+        <div class="weflow-api-section">
+          <n-input
+            v-model:value="weflowUrl"
+            placeholder="WeFlow API 地址"
+            size="small"
+            :disabled="weflowChecking"
+          />
+          <n-button
+            size="small"
+            type="primary"
+            :loading="weflowChecking"
+            @click="checkWeFlow"
+            style="margin-top: 8px"
+          >
+            连接
+          </n-button>
+
+          <div v-if="weflowAvailable && weflowSessions.length > 0" class="weflow-sessions">
+            <n-text depth="3" style="font-size: 13px">选择要导入的会话：</n-text>
+            <div
+              v-for="session in weflowSessions"
+              :key="session.id || session.sessionId"
+              class="weflow-session-item"
+              @click="importFromWeFlow(session.id || session.sessionId)"
+            >
+              <span>{{ session.name || session.displayName || session.id }}</span>
+              <n-text depth="3" style="font-size: 12px">
+                {{ session.messageCount || session.message_count || 0 }} 条消息
+              </n-text>
+            </div>
+          </div>
+
+          <div v-if="weflowAvailable && weflowSessions.length === 0" style="margin-top: 8px">
+            <n-text depth="3" style="font-size: 13px">未发现会话数据</n-text>
+          </div>
+        </div>
+      </n-collapse-item>
+    </n-collapse>
 
     <div v-if="importStore.isParsing" class="progress-area">
       <n-text>解析中... {{ importStore.parseProgress }}%</n-text>
@@ -280,5 +380,31 @@ defineExpose({ confirmAndImport })
   padding: 12px;
   background: #fff2f0;
   border-radius: 8px;
+}
+
+.weflow-api-section {
+  padding: 8px 0;
+}
+
+.weflow-sessions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weflow-session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+  background: var(--hover-bg);
+}
+
+.weflow-session-item:hover {
+  background: var(--border-color);
 }
 </style>

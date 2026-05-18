@@ -8,26 +8,26 @@ function tokenizeChinese(text: string): string[] {
 
   while (i < len) {
     const ch = text[i]
-    // 跳过标点、空格、数字
     if (/[\s\d\p{P}]/u.test(ch)) {
       i++
       continue
     }
 
-    // 连续的中文字符作为一个词（2-4字）
     if (/[一-龥]/.test(ch)) {
-      let word = ch
-      let j = i + 1
-      while (j < len && j < i + 4 && /[一-龥]/.test(text[j])) {
-        word += text[j]
-        j++
+      let runEnd = i
+      while (runEnd < len && /[一-龥]/.test(text[runEnd])) {
+        runEnd++
       }
-      words.push(word)
-      i++
+      const run = text.slice(i, runEnd)
+      for (const n of [2, 3, 4] as const) {
+        for (let start = 0; start <= run.length - n; start++) {
+          words.push(run.slice(start, start + n))
+        }
+      }
+      i = runEnd
       continue
     }
 
-    // 英文单词
     if (/[a-zA-Z]/.test(ch)) {
       let word = ch
       let j = i + 1

@@ -1,7 +1,7 @@
 # ChatMind - 项目状态报告
 
-> 生成日期: 2026-05-16
-> 当前版本: v0.1.0 MVP
+> 生成日期: 2026-05-18
+> 当前版本: v0.2.0
 > 构建状态: 通过
 
 ---
@@ -113,7 +113,7 @@
 |--------|----------|
 | DeepSeek | V3, R1 |
 | Kimi (月之暗面) | 8K / 32K / 128K |
-| MiniMax | abab6.5 / abab7 |
+| MiniMax | MiniMax-M2.1、MiniMax-Text-01、abab6.5、abab7 |
 | 百炼 (阿里云) | 通义千问 Plus/Max/Turbo/Coder |
 | SiliconFlow | DeepSeek V3/R1, Qwen2.5 |
 | 智谱 AI (GLM) | GLM-4 / Flash / Air / Plus |
@@ -125,7 +125,7 @@
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| 侧边栏导航 | 完成 | 可折叠，5 个主页面 + 导入 |
+| 侧边栏导航 | 完成 | 可折叠，6 个主页面 + 导入，基于 Vue Router |
 | 暗色模式 | 完成 | Light/Dark/Auto 三档切换 |
 | 消息列表 | 完成 | 分页 50 条，支持筛选，身份校准 |
 | 时间轴下钻 | 完成 | 点击情绪曲线查看当天记录 |
@@ -153,6 +153,7 @@
 |------|------|------|
 | 前端框架 | Vue 3 + TypeScript | ^3.5.34 |
 | 构建工具 | Vite | ^8.0.12 |
+| 路由 | Vue Router 4 | hash 模式（兼容 Electron） |
 | UI 组件库 | Naive UI | ^2.44.1 |
 | 状态管理 | Pinia | ^3.0.4 |
 | 可视化 | ECharts + vue-echarts | ^6.0.0 / ^8.0.1 |
@@ -169,11 +170,23 @@
 src/
 ├── ai/                          # AI 相关
 │   ├── client.ts               # AI 客户端（流式调用）
-│   └── providers.ts            # 8 家模型预设配置
+│   ├── ollama.ts               # Ollama 本地检测
+│   ├── providers.ts            # 模型预设配置
+│   ├── sanitizer.ts            # 隐私脱敏工具
+│   └── tools/                  # AI 工具调用
+│       ├── definitions.ts
+│       └── executor.ts
 │
 ├── analyzers/                   # 分析引擎
+│   ├── danger-signals.ts       # 危险信号检测
 │   ├── emotion.ts              # 情绪分析
+│   ├── emotion-dynamics.ts     # 情绪互动模式
+│   ├── event-markers.ts        # 事件自动检测
+│   ├── keyword-track.ts        # 关键词追踪
+│   ├── relationship-score.ts   # 关系健康度
+│   ├── relationship-stage.ts   # 关系阶段判定
 │   ├── statistics.ts           # 基础统计
+│   ├── time-shift.ts           # 聊天时段迁移
 │   └── word-frequency.ts       # 词频/延迟/长度/日历分析
 │
 ├── components/                  # 组件
@@ -187,16 +200,22 @@ src/
 │       └── ModelConfigDialog.vue
 │
 ├── db/                          # 数据库
-│   └── schema.ts               # IndexedDB 表结构
+│   └── schema.ts               # IndexedDB 表结构（v2，含 events）
 │
 ├── parsers/                     # 导入解析器
 │   ├── index.ts                # 解析器注册
+│   ├── chatlab-json.ts         # ChatLab 格式
+│   ├── weflow-api.ts           # WeFlow HTTP API
 │   ├── weflow-json.ts          # WeFlow JSON
 │   ├── weflow-csv.ts           # WeFlow CSV
 │   └── generic-txt.ts          # 通用 TXT
 │
+├── router/                      # 路由
+│   └── index.ts                # Vue Router 配置
+│
 ├── stores/                      # Pinia Stores
 │   ├── ai.ts                   # AI 对话状态
+│   ├── analysis.ts             # 分析结果缓存
 │   ├── identity.ts             # 身份识别状态
 │   ├── import.ts               # 导入状态
 │   ├── model-config.ts         # 多模型配置
@@ -211,14 +230,16 @@ src/
 ├── utils/                       # 工具函数
 │   ├── date.ts                 # 日期格式化
 │   ├── demo-data.ts            # 示例数据生成
-│   └── emotion-dict.ts         # 情感词典
+│   ├── emotion-dict.ts         # 情感词典
+│   └── export.ts               # 报告导出
 │
 ├── views/                       # 页面视图
 │   ├── AiChatView.vue          # AI 分析师
-│   ├── AnalysisView.vue        # 深度分析（5图表）
-│   ├── DashboardView.vue       # 分析仪表盘（3图表）
+│   ├── AnalysisView.vue        # 深度分析
+│   ├── DashboardView.vue       # 分析仪表盘
 │   ├── ImportView.vue          # 导入页
 │   ├── MessageListView.vue     # 聊天记录列表
+│   ├── ReportExportView.vue    # 报告导出
 │   └── TimelineView.vue        # 情绪时间轴
 │
 ├── App.vue                      # 根组件
@@ -230,11 +251,15 @@ src/
 ## 五、Git 提交历史
 
 ```
-d62b6db  feat: advanced visualizations - wordcloud, calendar, delay, length, emotion
+c01ffc9  feat: 引入 vue-router 实现页面路由导航
+63d2081  feat: 完善 MiniMax Token Plan 支持
+1e18ec1  feat: 扩展快捷问题 + 手动里程碑事件标记
+71debf3  feat: 并排对比视图 - 深度分析页面新增双方对比卡片
+d512931  docs: 全面修复项目文档，消除与实际代码的脱节
+12a14fe  feat: 事件标记自动检测
 2f40841  feat: multi-model support - DeepSeek, Kimi, MiniMax, Bailian, etc.
 5749498  feat: AI chat analyst with DeepSeek integration
 a87102f  feat: demo data, sidebar nav, message list, timeline drill-down
-dbe325a  fix: resolve TypeScript build errors
 7f64614  feat: core data pipeline - types, DB, parsers, identity, analysis
 aec10f8  init: Vite + Vue 3 + TypeScript project scaffold
 ```
@@ -249,7 +274,8 @@ aec10f8  init: Vite + Vue 3 + TypeScript project scaffold
 | Ollama 本地 AI | 完成 | 自动检测本地 Ollama，无需 API Key |
 | 群聊支持有限 | 低 | 当前主要针对一对一对话优化 |
 | 单文件体积大 | 低 | 生产包 1.5MB，需代码分割优化 |
-| 报告导出 | 完成 | 支持 PDF / 图片导出，含配置面板 |
+| 报告导出脱敏开关未生效 | **中** | `sanitizeEnabled` 有 UI 但导出函数未调用脱敏逻辑 |
+| Store `isLoading` 未使用 | 低 | 各视图重复定义本地 `isLoading`，未复用 store 全局状态 |
 | 数据库迁移机制 | **已补充** | Dexie 版本升级到 v2，新增 events 表 |
 | AI 无超时/重试 | **已修复** | 新增 AbortController（30秒超时）+ 自动重试（1次） |
 | 无单元测试 | 中 | 缺少 parsers / analyzers 的自动化测试 |

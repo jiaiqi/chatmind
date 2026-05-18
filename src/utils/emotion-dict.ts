@@ -7,16 +7,28 @@ export interface EmotionRule {
 }
 
 const POSITIVE_WORDS = [
-  '开心', '高兴', '喜欢', '爱你', '谢谢', '哈哈', '嘿嘿', '棒', '好', '赞',
+  '开心', '高兴', '喜欢', '爱你', '谢谢', '哈哈', '嘿嘿', '棒', '赞',
   '优秀', '厉害', '漂亮', '可爱', '舒服', '顺利', '完美', '幸福', '满足',
   '期待', '想你了', '么么哒', '比心', '❤️', '😊', '😄', '😆', '🥰', '😍',
   '👍', '💕', '💖', '🎉', '✨', '🌹', '😘', '🤗', '666', '牛',
+  '好的', '好呀', '好哒', '好哦', '好嘞', '太好', '好开心', '好喜欢',
+  '好棒', '好厉害', '好可爱', '好幸福', '好甜', '真好', '最好',
 ]
 
 const NEGATIVE_WORDS = [
   '烦', '讨厌', '失望', '难过', '伤心', '累', '糟糕', '郁闷', '无语',
   '嫌弃', '后悔', '担心', '焦虑', '压力', '委屈', '痛苦', '折磨',
   '😔', '😞', '😟', '😤', '😫', '😩', '😢', '😭', '💔',
+  '好烦', '好累', '好难过', '好讨厌', '好失望', '好气', '好无语',
+  '好烦人', '好恶心', '好难受', '好委屈', '好痛苦', '好伤心',
+]
+
+const INTENSIFIER_NEGATIVE_PATTERNS = [
+  /好烦/, /好累/, /好讨厌/, /好失望/, /好气/, /好无语/,
+  /好难受/, /好委屈/, /好痛苦/, /好伤心/, /好恶心/, /好烦人/,
+  /太烦/, /太累/, /太讨厌/, /太失望/, /太气/, /太无语/,
+  /真烦/, /真累/, /真讨厌/, /真失望/, /真气/, /真无语/,
+  /特别烦/, /特别累/, /特别讨厌/, /特别失望/,
 ]
 
 const ANGRY_WORDS = [
@@ -38,12 +50,38 @@ const AFFECTIONATE_WORDS = [
 ]
 
 const INDIFFERENT_WORDS = [
-  '嗯', '哦', '啊', '好', '知道了', '行', '随便', '都可以',
-  '随你', '你决定', '嗯嗯', '哦哦', '啊啊', '…', '......',
+  '知道了', '行', '随便', '都可以',
+  '随你', '你决定', '哦哦', '…', '......',
   '😐', '🙄', '😶', '👌',
 ]
 
+const PERFUNCTORY_PATTERNS = [
+  /^嗯{1,2}$/,
+  /^哦{1,2}$/,
+  /^好{1,2}$/,
+  /^行{1,2}$/,
+  /^知道了?$/,
+  /^随便$/,
+  /^都可以$/,
+  /^嗯嗯嗯+$/,
+]
+
 export function ruleBasedEmotion(text: string): { label: EmotionLabel; score: number } | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+
+  for (const pattern of PERFUNCTORY_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return { label: 'indifferent', score: 0.7 }
+    }
+  }
+
+  for (const pattern of INTENSIFIER_NEGATIVE_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      return { label: 'negative', score: 0.8 }
+    }
+  }
+
   let matched = false
   let matchedLabel: EmotionLabel = 'neutral'
   let maxWeight = 0

@@ -14,9 +14,11 @@ import {
   TitleComponent,
 } from 'echarts/components'
 import { useSessionStore } from '../stores/session'
+import { useAnalysisStore } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
-import { calculateStatistics, formatDuration } from '../analyzers/statistics'
+import { formatDuration } from '../analyzers/statistics'
+import { calculateStatistics } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { calculateRelationshipScore } from '../analyzers/relationship-score'
 import { detectDangerSignals } from '../analyzers/danger-signals'
@@ -32,6 +34,7 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const analysisStore = useAnalysisStore()
 const themeStore = useThemeStore()
 const message = useMessage()
 
@@ -63,8 +66,14 @@ async function loadData() {
 
   isLoading.value = true
   try {
+    await analysisStore.ensureAnalysis(sessionId)
     const [start, end] = getTimeRange()
-    messages.value = await sessionStore.getMessagesByTimeRange(sessionId, start, end)
+    const allMsgs = analysisStore.messages
+    if (timeRange.value === 'all') {
+      messages.value = allMsgs
+    } else {
+      messages.value = allMsgs.filter(m => m.timestamp >= start && m.timestamp <= end)
+    }
   } catch {
     message.error('加载数据失败')
   } finally {

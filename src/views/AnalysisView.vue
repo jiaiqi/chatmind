@@ -16,6 +16,7 @@ import {
 } from 'echarts/components'
 import 'echarts-wordcloud'
 import { useSessionStore } from '../stores/session'
+import { useAnalysisStore } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
 import {
@@ -40,6 +41,7 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const analysisStore = useAnalysisStore()
 const themeStore = useThemeStore()
 const message = useMessage()
 
@@ -106,7 +108,8 @@ async function loadData() {
 
   isLoading.value = true
   try {
-    messages.value = await sessionStore.getMessagesByTimeRange(sessionId, 0, Date.now())
+    await analysisStore.ensureAnalysis(sessionId)
+    messages.value = analysisStore.messages
   } catch (err) {
     message.error('加载数据失败')
   } finally {

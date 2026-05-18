@@ -38,11 +38,6 @@ export class AiClient {
       body: JSON.stringify(body),
     })
 
-    if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`API 请求失败 (${response.status}): ${err}`)
-    }
-
     const reader = response.body?.getReader()
     if (!reader) throw new Error('无法读取响应')
 
@@ -86,23 +81,30 @@ export class AiClient {
           signal: controller.signal,
         })
         clearTimeout(timeoutId)
+
+        if (response.status >= 400 && response.status < 500) {
+          const errText = await response.text()
+          throw new Error(`API 请求失败 (${response.status}): ${errText}`)
+        }
+
+        if (!response.ok) {
+          throw new Error(`API 请求失败 (${response.status})`)
+        }
+
         return response
       } catch (err) {
         clearTimeout(timeoutId)
 
-        // 超时错误转换为用户友好提示
         if (err instanceof Error && err.name === 'AbortError') {
           lastError = new Error(`请求超时（${this.timeout / 1000}秒），请检查网络或稍后重试`)
         } else {
           lastError = err instanceof Error ? err : new Error(String(err))
         }
 
-        // 不重试客户端错误（4xx）
-        if (err instanceof Response && err.status >= 400 && err.status < 500) {
+        if (err instanceof Error && err.message.startsWith('API 请求失败 (4')) {
           throw lastError
         }
 
-        // 超时或网络错误，且还有重试次数
         if (attempt < this.retries) {
           await this.delay(1000 * (attempt + 1))
           continue

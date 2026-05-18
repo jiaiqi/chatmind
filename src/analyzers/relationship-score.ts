@@ -1,5 +1,6 @@
 import type { DbMessage } from '../db/schema'
 import type { StatisticsResult } from '../types/analysis'
+import { getLatestTimestamp } from '../utils/date'
 
 export interface RelationshipScore {
   total: number
@@ -44,7 +45,7 @@ export function calculateRelationshipScore(
   if (avgDelay > 12 * 60 * 60 * 1000) responsiveness = 20
 
   // 4. 互动稳定性 (0-100) - 用近 30 天 vs 前 30 天的消息量变化衡量
-  const now = Date.now()
+  const now = getLatestTimestamp(messages)
   const recent30 = messages.filter(m => m.timestamp >= now - 30 * 24 * 60 * 60 * 1000).length
   const prev30 = messages.filter(
     m => m.timestamp >= now - 60 * 24 * 60 * 60 * 1000 && m.timestamp < now - 30 * 24 * 60 * 60 * 1000,

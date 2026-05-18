@@ -14,6 +14,7 @@ import {
   TitleComponent, DataZoomComponent,
 } from 'echarts/components'
 import { useSessionStore } from '../stores/session'
+import { useAnalysisStore } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
 import { calculateEmotionTrend } from '../analyzers/emotion'
@@ -31,6 +32,7 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const analysisStore = useAnalysisStore()
 const themeStore = useThemeStore()
 const message = useMessage()
 
@@ -110,8 +112,11 @@ async function loadData() {
   if (!sessionId) return
 
   try {
-    messages.value = await sessionStore.getMessagesByTimeRange(sessionId, 0, Date.now())
-    emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
+    await analysisStore.ensureAnalysis(sessionId)
+    messages.value = analysisStore.messages
+    emotionTrend.value = analysisStore.emotionTrend.length
+      ? analysisStore.emotionTrend
+      : calculateEmotionTrend(messages.value, 'day')
     const autoEvents = detectAutoEvents(messages.value)
     const dbEvents = await sessionStore.getEvents(sessionId)
     const mappedUserEvents: ChatEvent[] = dbEvents.map(e => ({

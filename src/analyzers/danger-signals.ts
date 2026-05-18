@@ -1,11 +1,13 @@
 import type { DbMessage } from '../db/schema'
 import type { DangerSignal } from '../types/analysis'
+import { getLatestTimestamp } from '../utils/date'
 
 export function detectDangerSignals(messages: DbMessage[]): DangerSignal[] {
   if (messages.length < 50) return []
 
   const signals: DangerSignal[] = []
   const sorted = [...messages].sort((a, b) => a.timestamp - b.timestamp)
+  const now = getLatestTimestamp(sorted)
 
   // 1. 倾诉不对等：一方消息量占比超过 70%
   const selfCount = sorted.filter(m => m.isSelf).length
@@ -38,8 +40,8 @@ export function detectDangerSignals(messages: DbMessage[]): DangerSignal[] {
 
   // 3. 负面词汇突增（近 30 天 vs 前 30 天）
   const negativeKeywords = ['烦', '讨厌', '失望', '难过', '生气', '滚', '分手', '离婚', '够了', '别说了']
-  const recentNegative = countKeywordInLastNDays(sorted, 30, negativeKeywords)
-  const previousNegative = countKeywordInPreviousNDays(sorted, 30, 30, negativeKeywords)
+  const recentNegative = countKeywordInLastNDays(sorted, 30, negativeKeywords, now)
+  const previousNegative = countKeywordInPreviousNDays(sorted, 30, 30, negativeKeywords, now)
 
   if (recentNegative > previousNegative * 2 && recentNegative >= 5) {
     signals.push({
@@ -50,7 +52,7 @@ export function detectDangerSignals(messages: DbMessage[]): DangerSignal[] {
   }
 
   // 4. 敷衍回应占比过高
-  const recentMessages = getLastNDaysMessages(sorted, 30)
+  const recentMessages = getLastNDaysMessages(sorted, 30, now)
   const indifferentCount = recentMessages.filter(m => m.emotion === 'indifferent').length
   const indifferentRatio = recentMessages.length > 0 ? indifferentCount / recentMessages.length : 0
 
@@ -95,19 +97,19 @@ function findSilentPeriods(messages: DbMessage[], thresholdDays: number) {
   return periods
 }
 
-function countKeywordInLastNDays(messages: DbMessage[], n: number, keywords: string[]) {
-  const cutoff = Date.now() - n * 24 * 60 * 60 * 1000
+function countKeywordInLastNDays(messages: DbMessage[], n: number, keywords: string[], now: number) {
+  const cutoff = now - n * 24 * 60 * 60 * 1000
   return messages.filter(m => m.timestamp >= cutoff && keywords.some(k => m.content.includes(k))).length
 }
 
-function countKeywordInPreviousNDays(messages: DbMessage[], lastN: number, prevN: number, keywords: string[]) {
-  const end = Date.now() - lastN * 24 * 60 * 60 * 1000
+function countKeywordInPreviousNDays(messages: DbMessage[], lastN: number, prevN: number, keywords: string[], now: number) {
+  const end = now - lastN * 24 * 60 * 60 * 1000
   const start = end - prevN * 24 * 60 * 60 * 1000
   return messages.filter(m => m.timestamp >= start && m.timestamp < end && keywords.some(k => m.content.includes(k))).length
 }
 
-function getLastNDaysMessages(messages: DbMessage[], n: number) {
-  const cutoff = Date.now() - n * 24 * 60 * 60 * 1000
+function getLastNDaysMessages(messages: DbMessage[], n: number, now: number) {
+  const cutoff = now - n * 24 * 60 * 60 * 1000
   return messages.filter(m => m.timestamp >= cutoff)
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { computed, watch, onMounted } from 'vue'
 import {
   NCard, NGrid, NGridItem, NStatistic, NDivider,
   NButton, NEmpty, NProgress, NAlert, NSpace, NTag, useMessage,
@@ -13,19 +13,11 @@ import {
   TitleComponent, ToolboxComponent,
 } from 'echarts/components'
 import { useSessionStore } from '../stores/session'
+import { useAnalysisStore } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
-import { calculateStatistics, formatDuration } from '../analyzers/statistics'
-import { calculateEmotionTrend } from '../analyzers/emotion'
-import { calculateRelationshipScore } from '../analyzers/relationship-score'
-import { detectDangerSignals } from '../analyzers/danger-signals'
-import { determineRelationshipStage } from '../analyzers/relationship-stage'
+import { formatDuration } from '../analyzers/statistics'
 import { formatDate } from '../utils/date'
-import type { RelationshipStageResult } from '../analyzers/relationship-stage'
-import type { StatisticsResult } from '../types/analysis'
-import type { DbMessage } from '../db/schema'
-import type { RelationshipScore } from '../analyzers/relationship-score'
-import type { DangerSignal } from '../types/analysis'
 
 use([
   CanvasRenderer,
@@ -35,16 +27,9 @@ use([
 ])
 
 const sessionStore = useSessionStore()
+const analysisStore = useAnalysisStore()
 const themeStore = useThemeStore()
 const message = useMessage()
-
-const messages = ref<DbMessage[]>([])
-const stats = ref<StatisticsResult | null>(null)
-const emotionTrend = ref<any[]>([])
-const score = ref<RelationshipScore | null>(null)
-const dangerSignals = ref<DangerSignal[]>([])
-const stage = ref<RelationshipStageResult | null>(null)
-const isLoading = ref(false)
 
 const hasData = computed(() => sessionStore.currentSession !== null)
 
@@ -62,19 +47,10 @@ const timeRangeText = computed(() => {
 async function loadData() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
-
-  isLoading.value = true
   try {
-    messages.value = await sessionStore.getMessagesByTimeRange(sessionId, 0, Date.now())
-    stats.value = calculateStatistics(messages.value)
-    emotionTrend.value = calculateEmotionTrend(messages.value, 'day')
-    score.value = calculateRelationshipScore(messages.value, stats.value)
-    dangerSignals.value = detectDangerSignals(messages.value)
-    stage.value = determineRelationshipStage(messages.value, stats.value)
+    await analysisStore.ensureAnalysis(sessionId)
   } catch (err) {
     message.error('加载数据失败')
-  } finally {
-    isLoading.value = false
   }
 }
 
@@ -82,7 +58,7 @@ watch(() => sessionStore.currentSessionId, loadData)
 onMounted(loadData)
 
 const emotionChartOption = computed(() => {
-  if (!emotionTrend.value.length) return {}
+  if (!analysisStore.emotionTrend.length) return {}
 
   return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
@@ -93,7 +69,7 @@ const emotionChartOption = computed(() => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: emotionTrend.value.map(d => d.date),
+      data: analysisStore.emotionTrend.map(d => d.date),
     },
     yAxis: { type: 'value', minInterval: 1 },
     series: [
@@ -101,7 +77,7 @@ const emotionChartOption = computed(() => {
         name: '我-正面',
         type: 'line',
         smooth: true,
-        data: emotionTrend.value.map(d => d.selfPositive),
+        data: analysisStore.emotionTrend.map(d => d.selfPositive),
         itemStyle: { color: '#18a058' },
         areaStyle: { opacity: 0.1 },
       },
@@ -109,7 +85,7 @@ const emotionChartOption = computed(() => {
         name: '我-负面',
         type: 'line',
         smooth: true,
-        data: emotionTrend.value.map(d => d.selfNegative),
+        data: analysisStore.emotionTrend.map(d => d.selfNegative),
         itemStyle: { color: '#d03050' },
         areaStyle: { opacity: 0.1 },
       },
@@ -117,7 +93,7 @@ const emotionChartOption = computed(() => {
         name: '对方-正面',
         type: 'line',
         smooth: true,
-        data: emotionTrend.value.map(d => d.otherPositive),
+        data: analysisStore.emotionTrend.map(d => d.otherPositive),
         itemStyle: { color: '#2080f0' },
         lineStyle: { type: 'dashed' },
       },
@@ -125,7 +101,7 @@ const emotionChartOption = computed(() => {
         name: '对方-负面',
         type: 'line',
         smooth: true,
-        data: emotionTrend.value.map(d => d.otherNegative),
+        data: analysisStore.emotionTrend.map(d => d.otherNegative),
         itemStyle: { color: '#f0a020' },
         lineStyle: { type: 'dashed' },
       },
@@ -134,7 +110,7 @@ const emotionChartOption = computed(() => {
 })
 
 const hourlyChartOption = computed(() => {
-  if (!stats.value) return {}
+  if (!analysisStore.stats) return {}
   return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
@@ -145,26 +121,26 @@ const hourlyChartOption = computed(() => {
     yAxis: { type: 'value' },
     series: [{
       type: 'bar',
-      data: stats.value.hourlyDistribution,
+      data: analysisStore.stats.hourlyDistribution,
       itemStyle: { color: '#18a058' },
     }],
   })
 })
 
 const healthScoreClass = computed(() => {
-  if (!score.value) return ''
-  const s = score.value.total
+  if (!analysisStore.score) return ''
+  const s = analysisStore.score.total
   return s >= 80 ? 'health-good' : s >= 60 ? 'health-normal' : s >= 40 ? 'health-warning' : 'health-bad'
 })
 
 const healthColor = computed(() => {
-  if (!score.value) return '#18a058'
-  const s = score.value.total
+  if (!analysisStore.score) return '#18a058'
+  const s = analysisStore.score.total
   return s >= 80 ? '#18a058' : s >= 60 ? '#2080f0' : s >= 40 ? '#f0a020' : '#d03050'
 })
 
 const stageTagType = computed(() => {
-  if (!stage.value) return 'default'
+  if (!analysisStore.stage) return 'default'
   const types: Record<string, any> = {
     '蜜月期': 'error',
     '稳定期': 'success',
@@ -172,11 +148,11 @@ const stageTagType = computed(() => {
     '危机期': 'error',
     '修复期': 'info',
   }
-  return types[stage.value.stage] || 'default'
+  return types[analysisStore.stage.stage] || 'default'
 })
 
 const ratioChartOption = computed(() => {
-  if (!stats.value) return {}
+  if (!analysisStore.stats) return {}
   return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'item' },
     legend: { top: '5%', left: 'center' },
@@ -186,8 +162,8 @@ const ratioChartOption = computed(() => {
       avoidLabelOverlap: false,
       label: { show: true, formatter: '{b}: {c} ({d}%)' },
       data: [
-        { value: stats.value.selfMessages, name: '我', itemStyle: { color: '#18a058' } },
-        { value: stats.value.otherMessages, name: '对方', itemStyle: { color: '#2080f0' } },
+        { value: analysisStore.stats.selfMessages, name: '我', itemStyle: { color: '#18a058' } },
+        { value: analysisStore.stats.otherMessages, name: '对方', itemStyle: { color: '#2080f0' } },
       ],
     }],
   })
@@ -205,28 +181,28 @@ const ratioChartOption = computed(() => {
       <n-grid :cols="4" :x-gap="16" :y-gap="16" class="stats-grid">
         <n-grid-item>
           <n-card>
-            <n-statistic label="消息总数" :value="stats?.totalMessages || 0" />
+            <n-statistic label="消息总数" :value="analysisStore.stats?.totalMessages || 0" />
           </n-card>
         </n-grid-item>
         <n-grid-item>
           <n-card>
-            <n-statistic label="我的消息" :value="stats?.selfMessages || 0" />
+            <n-statistic label="我的消息" :value="analysisStore.stats?.selfMessages || 0" />
           </n-card>
         </n-grid-item>
         <n-grid-item>
           <n-card>
-            <n-statistic label="对方消息" :value="stats?.otherMessages || 0" />
+            <n-statistic label="对方消息" :value="analysisStore.stats?.otherMessages || 0" />
           </n-card>
         </n-grid-item>
         <n-grid-item>
           <n-card>
-            <n-statistic label="平均回复" :value="formatDuration(stats?.avgReplyDelay || 0)" />
+            <n-statistic label="平均回复" :value="formatDuration(analysisStore.stats?.avgReplyDelay || 0)" />
           </n-card>
         </n-grid-item>
       </n-grid>
 
       <!-- 关系阶段 -->
-      <n-card v-if="stage" class="stage-card">
+      <n-card v-if="analysisStore.stage" class="stage-card">
         <div class="stage-header">
           <div class="stage-main">
             <span class="stage-label">当前关系阶段</span>
@@ -235,18 +211,18 @@ const ratioChartOption = computed(() => {
               :type="stageTagType"
               style="font-size: 18px; font-weight: 600; padding: 4px 16px"
             >
-              {{ stage.stage }}
+              {{ analysisStore.stage.stage }}
             </n-tag>
           </div>
           <div class="stage-confidence">
-            置信度 {{ (stage.confidence * 100).toFixed(0) }}%
+            置信度 {{ (analysisStore.stage.confidence * 100).toFixed(0) }}%
           </div>
         </div>
-        <p class="stage-reasoning">{{ stage.reasoning }}</p>
-        <n-space v-if="stage.keyIndicators.length" size="small" style="margin-top: 12px"
+        <p class="stage-reasoning">{{ analysisStore.stage.reasoning }}</p>
+        <n-space v-if="analysisStore.stage.keyIndicators.length" size="small" style="margin-top: 12px"
         >
           <n-tag
-            v-for="(ind, i) in stage.keyIndicators"
+            v-for="(ind, i) in analysisStore.stage.keyIndicators"
             :key="i"
             size="small"
             :type="ind.impact === 'positive' ? 'success' : ind.impact === 'negative' ? 'warning' : 'default'"
@@ -257,43 +233,43 @@ const ratioChartOption = computed(() => {
       </n-card>
 
       <!-- 关系健康度 -->
-      <n-card v-if="score" class="health-card">
+      <n-card v-if="analysisStore.score" class="health-card">
         <div class="health-header">
           <span class="health-label">关系健康度</span>
-          <span class="health-score" :class="healthScoreClass">{{ score.total }}分</span>
+          <span class="health-score" :class="healthScoreClass">{{ analysisStore.score.total }}分</span>
         </div>
         <n-progress
           type="line"
-          :percentage="score.total"
+          :percentage="analysisStore.score.total"
           :color="healthColor"
           :height="12"
           :show-indicator="false"
         />
-        <p class="health-desc">{{ score.interpretation }}</p>
-        <n-space v-if="score.total > 0" size="small" style="margin-top: 8px">
-          <n-tag size="small" :type="score.breakdown.balance >= 60 ? 'success' : 'warning'"
-            >平衡 {{ score.breakdown.balance }}</n-tag
+        <p class="health-desc">{{ analysisStore.score.interpretation }}</p>
+        <n-space v-if="analysisStore.score.total > 0" size="small" style="margin-top: 8px">
+          <n-tag size="small" :type="analysisStore.score.breakdown.balance >= 60 ? 'success' : 'warning'"
+            >平衡 {{ analysisStore.score.breakdown.balance }}</n-tag
           >
-          <n-tag size="small" :type="score.breakdown.positivity >= 60 ? 'success' : 'warning'"
-            >正向 {{ score.breakdown.positivity }}</n-tag
+          <n-tag size="small" :type="analysisStore.score.breakdown.positivity >= 60 ? 'success' : 'warning'"
+            >正向 {{ analysisStore.score.breakdown.positivity }}</n-tag
           >
-          <n-tag size="small" :type="score.breakdown.responsiveness >= 60 ? 'success' : 'warning'"
-            >及时 {{ score.breakdown.responsiveness }}</n-tag
+          <n-tag size="small" :type="analysisStore.score.breakdown.responsiveness >= 60 ? 'success' : 'warning'"
+            >及时 {{ analysisStore.score.breakdown.responsiveness }}</n-tag
           >
-          <n-tag size="small" :type="score.breakdown.consistency >= 60 ? 'success' : 'warning'"
-            >稳定 {{ score.breakdown.consistency }}</n-tag
+          <n-tag size="small" :type="analysisStore.score.breakdown.consistency >= 60 ? 'success' : 'warning'"
+            >稳定 {{ analysisStore.score.breakdown.consistency }}</n-tag
           >
-          <n-tag size="small" :type="score.breakdown.depth >= 60 ? 'success' : 'warning'"
-            >深度 {{ score.breakdown.depth }}</n-tag
+          <n-tag size="small" :type="analysisStore.score.breakdown.depth >= 60 ? 'success' : 'warning'"
+            >深度 {{ analysisStore.score.breakdown.depth }}</n-tag
           >
         </n-space>
       </n-card>
 
       <!-- 危险信号 -->
-      <n-card v-if="dangerSignals.length > 0" title="⚠️ 关系预警信号" class="danger-card">
+      <n-card v-if="analysisStore.dangerSignals.length > 0" title="⚠️ 关系预警信号" class="danger-card">
         <n-space vertical>
           <n-alert
-            v-for="(signal, i) in dangerSignals"
+            v-for="(signal, i) in analysisStore.dangerSignals"
             :key="i"
             :type="signal.severity === 'high' ? 'error' : 'warning'"
             :title="signal.signal"
