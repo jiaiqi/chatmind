@@ -1,4 +1,5 @@
 import type { DbMessage } from '../db/schema'
+import { safeHighlight } from '../utils/html'
 
 export interface KeywordTrendPoint {
   date: string
@@ -96,7 +97,5 @@ function getTimeKey(timestamp: number, granularity: 'day' | 'week' | 'month'): s
 }
 
 export function highlightKeyword(text: string, keyword: string): string {
-  if (!keyword.trim()) return text
-  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
-  return text.replace(regex, '<mark>$1</mark>')
+  return safeHighlight(text, keyword)
 }

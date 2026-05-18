@@ -13,12 +13,10 @@ export interface ProviderConfig {
   apiKeyUrl: string
   docsUrl: string
   models: ModelInfo[]
-  // 是否标准 OpenAI 格式
   isOpenAICompatible: boolean
-  // 是否需要特殊 headers
   extraHeaders?: Record<string, string>
-  // 是否需要自定义请求体转换
   needsTransform?: boolean
+  supportsFunctionCalling?: boolean
 }
 
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
@@ -43,6 +41,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://platform.deepseek.com/api_keys',
     docsUrl: 'https://platform.deepseek.com/docs',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'deepseek-chat', name: 'DeepSeek V3', description: '通用对话，性价比高' },
       { id: 'deepseek-reasoner', name: 'DeepSeek R1', description: '推理模型，深度思考' },
@@ -55,6 +54,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
     docsUrl: 'https://platform.moonshot.cn/docs',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'moonshot-v1-8k', name: 'Kimi 8K', description: '轻量级，适合简单对话' },
       { id: 'moonshot-v1-32k', name: 'Kimi 32K', description: '长文本，适合深度分析' },
@@ -68,6 +68,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     docsUrl: 'https://platform.minimaxi.com/docs/token-plan/intro',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'MiniMax-M2.1', name: 'MiniMax-M2.1', description: 'Token Plan 主力模型，Agent 能力最强' },
       { id: 'MiniMax-Text-01', name: 'MiniMax-Text-01', description: '长文本模型，支持 400K 上下文' },
@@ -84,6 +85,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://bailian.console.aliyun.com/?apiKey=1#/api-key',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/developer-reference/',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'qwen-plus', name: '通义千问 Plus', description: '综合能力最强' },
       { id: 'qwen-max', name: '通义千问 Max', description: '深度推理' },
@@ -98,6 +100,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://cloud.siliconflow.cn/account/ak',
     docsUrl: 'https://docs.siliconflow.cn/',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3', description: '通过SiliconFlow调用' },
       { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1', description: '通过SiliconFlow调用' },
@@ -111,6 +114,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     docsUrl: 'https://open.bigmodel.cn/dev/howuse/glm-4',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'glm-4', name: 'GLM-4', description: '旗舰模型' },
       { id: 'glm-4-flash', name: 'GLM-4 Flash', description: '快速轻量' },
@@ -125,6 +129,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application',
     docsUrl: 'https://cloud.baidu.com/doc/WENXINWORKSHOP/index.html',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'ernie-4.0-turbo-8k', name: '文心 4.0 Turbo', description: '最新旗舰' },
       { id: 'ernie-3.5-8k', name: '文心 3.5', description: '经典模型' },
@@ -138,6 +143,7 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     apiKeyUrl: 'https://console.cloud.tencent.com/hunyuan/api-key',
     docsUrl: 'https://cloud.tencent.com/document/product/1729/111007',
     isOpenAICompatible: true,
+    supportsFunctionCalling: true,
     models: [
       { id: 'hunyuan-turbo', name: '混元 Turbo', description: '旗舰模型' },
       { id: 'hunyuan-pro', name: '混元 Pro', description: '专业版' },

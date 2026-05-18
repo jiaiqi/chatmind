@@ -4,25 +4,35 @@ export interface ToolDefinition {
   parameters: Record<string, any>
 }
 
+export interface ToolParameterInfo {
+  type: string
+  description: string
+  enum?: string[]
+  default?: any
+  items?: { type: string }
+  required?: boolean
+  maximum?: number
+}
+
 export const toolDefinitions: ToolDefinition[] = [
   {
     name: 'query_messages',
     description: '查询指定时间范围内的聊天记录，可筛选发送者、关键词',
     parameters: {
-      startDate: { type: 'string', description: '开始日期，ISO 8601 格式，如 2024-01-01' },
-      endDate: { type: 'string', description: '结束日期，ISO 8601 格式，如 2024-12-31' },
-      sender: { type: 'string', enum: ['self', 'other', 'any'], default: 'any', description: '发送者筛选' },
-      keyword: { type: 'string', description: '关键词筛选，支持模糊匹配' },
-      limit: { type: 'number', default: 20, maximum: 100, description: '返回条数' },
+      startDate: { type: 'string', description: '开始日期，ISO 8601 格式，如 2024-01-01', required: true } as ToolParameterInfo,
+      endDate: { type: 'string', description: '结束日期，ISO 8601 格式，如 2024-12-31', required: true } as ToolParameterInfo,
+      sender: { type: 'string', enum: ['self', 'other', 'any'], default: 'any', description: '发送者筛选' } as ToolParameterInfo,
+      keyword: { type: 'string', description: '关键词筛选，支持模糊匹配' } as ToolParameterInfo,
+      limit: { type: 'number', default: 20, maximum: 100, description: '返回条数' } as ToolParameterInfo,
     },
   },
   {
     name: 'query_emotion_trend',
     description: '查询某段时间内的情绪趋势数据',
     parameters: {
-      startDate: { type: 'string', description: '开始日期' },
-      endDate: { type: 'string', description: '结束日期' },
-      granularity: { type: 'string', enum: ['day', 'week', 'month'], default: 'day', description: '时间粒度' },
+      startDate: { type: 'string', description: '开始日期', required: true } as ToolParameterInfo,
+      endDate: { type: 'string', description: '结束日期', required: true } as ToolParameterInfo,
+      granularity: { type: 'string', enum: ['day', 'week', 'month'], default: 'day', description: '时间粒度' } as ToolParameterInfo,
     },
   },
   {
@@ -33,20 +43,56 @@ export const toolDefinitions: ToolDefinition[] = [
         type: 'string',
         enum: ['message_count', 'reply_delay', 'active_hours', 'word_freq', 'initiation_ratio', 'length_trend'],
         description: '要查询的指标',
-      },
-      startDate: { type: 'string', description: '开始日期' },
-      endDate: { type: 'string', description: '结束日期' },
+        required: true,
+      } as ToolParameterInfo,
+      startDate: { type: 'string', description: '开始日期' } as ToolParameterInfo,
+      endDate: { type: 'string', description: '结束日期' } as ToolParameterInfo,
     },
   },
   {
     name: 'search_keywords',
     description: '搜索包含特定关键词的消息，分析其上下文',
     parameters: {
-      keywords: { type: 'array', items: { type: 'string' }, description: '关键词列表' },
-      limit: { type: 'number', default: 20, description: '返回条数' },
+      keywords: { type: 'array', items: { type: 'string' }, description: '关键词列表', required: true } as ToolParameterInfo,
+      limit: { type: 'number', default: 20, description: '返回条数' } as ToolParameterInfo,
     },
   },
 ]
+
+export function buildAiToolDefinitions(): import('../client').AiToolDefinition[] {
+  return toolDefinitions.map(tool => {
+    const properties: Record<string, any> = {}
+    const required: string[] = []
+
+    for (const [key, raw] of Object.entries(tool.parameters)) {
+      const info = raw as ToolParameterInfo
+      const prop: Record<string, any> = {
+        type: info.type,
+        description: info.description,
+      }
+      if (info.enum) prop.enum = info.enum
+      if (info.items) prop.items = info.items
+      properties[key] = prop
+
+      if (info.required) {
+        required.push(key)
+      }
+    }
+
+    return {
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: {
+          type: 'object',
+          properties,
+          required: required.length > 0 ? required : undefined,
+        },
+      },
+    }
+  })
+}
 
 export function buildToolsPrompt(): string {
   const lines = [

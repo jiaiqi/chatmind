@@ -6,17 +6,12 @@ import {
   NModal, NForm, NFormItem, NInput, NDatePicker,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart } from 'echarts/charts'
-import {
-  GridComponent, TooltipComponent, LegendComponent,
-  TitleComponent, DataZoomComponent,
-} from 'echarts/components'
+import { registerECharts } from '../utils/echarts'
 import { useSessionStore } from '../stores/session'
 import { useAnalysisStore } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
+import { EMOTION_COLORS, EMOTION_EMOJIS, EMOTION_LABELS, ROLE_COLORS } from '../constants/emotion'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { detectAutoEvents } from '../analyzers/event-markers'
 import { formatDateTime } from '../utils/date'
@@ -24,12 +19,7 @@ import type { DbMessage } from '../db/schema'
 import type { EmotionLabel } from '../types/message'
 import type { ChatEvent } from '../analyzers/event-markers'
 
-use([
-  CanvasRenderer,
-  LineChart,
-  GridComponent, TooltipComponent, LegendComponent,
-  TitleComponent, DataZoomComponent,
-])
+registerECharts()
 
 const sessionStore = useSessionStore()
 const analysisStore = useAnalysisStore()
@@ -50,35 +40,9 @@ const newEventForm = ref({
   severity: 'medium' as 'low' | 'medium' | 'high',
 })
 
-const emotionColors: Record<EmotionLabel, string> = {
-  positive: '#18a058',
-  negative: '#d03050',
-  neutral: '#909399',
-  angry: '#f56c6c',
-  sad: '#909399',
-  affectionate: '#e6a23c',
-  indifferent: '#c0c4cc',
-}
-
-const emotionLabels: Record<string, string> = {
-  positive: '😊',
-  negative: '😟',
-  neutral: '😐',
-  angry: '😡',
-  sad: '😢',
-  affectionate: '💕',
-  indifferent: '🙄',
-}
-
-const emotionFullLabels: Record<string, string> = {
-  positive: '😊 正面',
-  negative: '😟 负面',
-  neutral: '😐 中性',
-  angry: '😡 愤怒',
-  sad: '😢 悲伤',
-  affectionate: '💕 亲昵',
-  indifferent: '🙄 敷衍',
-}
+const emotionColors = EMOTION_COLORS
+const emotionLabels = EMOTION_EMOJIS
+const emotionFullLabels = EMOTION_LABELS
 
 const allEmotions: EmotionLabel[] = ['positive', 'negative', 'neutral', 'angry', 'sad', 'affectionate', 'indifferent']
 

@@ -8,6 +8,7 @@ import {
 import { SparklesOutline, SendOutline, TrashOutline, PersonOutline, SettingsOutline } from '@vicons/ionicons5'
 import { useAiStore } from '../stores/ai'
 import { useModelConfigStore } from '../stores/model-config'
+import { escapeHtml } from '../utils/html'
 import ModelConfigDialog from '../components/ModelConfig/ModelConfigDialog.vue'
 
 const aiStore = useAiStore()
@@ -36,8 +37,8 @@ const quickQuestions = [
 ]
 
 function formatMessageContent(content: string): string {
-  // 将 [MSG:YYYY-MM-DD] 替换为可点击链接
-  return content
+  const escaped = escapeHtml(content)
+  return escaped
     .replace(/\[MSG:(\d{4}-\d{2}-\d{2})\]/g, '<a class="msg-trace-link" href="#" data-date="$1">📎 查看 $1 记录</a>')
     .replace(/\n/g, '<br>')
 }

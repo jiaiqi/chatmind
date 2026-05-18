@@ -144,6 +144,14 @@ export const useSessionStore = defineStore('session', () => {
     currentSessionId.value = id
   }
 
+  async function renameSession(sessionId: string, newName: string) {
+    await db.sessions.update(sessionId, { name: newName })
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      session.name = newName
+    }
+  }
+
   return {
     sessions,
     currentSessionId,
@@ -165,5 +173,6 @@ export const useSessionStore = defineStore('session', () => {
     addEvent,
     deleteEvent,
     setCurrentSession,
+    renameSession,
   }
 })

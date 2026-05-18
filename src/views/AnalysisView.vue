@@ -3,22 +3,15 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NGrid, NGridItem, NEmpty, useMessage, NTag, NSpace,
   NInput, NButton, NH3, NProgress, NDivider,
+  NRadioGroup, NRadioButton, NDatePicker,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import {
-  BarChart, LineChart, PieChart, HeatmapChart, ScatterChart,
-} from 'echarts/charts'
-import {
-  GridComponent, TooltipComponent, LegendComponent,
-  TitleComponent, VisualMapComponent, CalendarComponent,
-} from 'echarts/components'
-import 'echarts-wordcloud'
+import { registerECharts } from '../utils/echarts'
 import { useSessionStore } from '../stores/session'
-import { useAnalysisStore } from '../stores/analysis'
+import { useAnalysisStore, type TimeRangeFilter } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
+import { EMOTION_META, ROLE_COLORS } from '../constants/emotion'
 import {
   calculateWordFrequency,
   calculateReplyDelayDistribution,
@@ -33,12 +26,7 @@ import { calculateTimeShift } from '../analyzers/time-shift'
 import type { DbMessage } from '../db/schema'
 import type { KeywordTrendPoint, KeywordMatch } from '../analyzers/keyword-track'
 
-use([
-  CanvasRenderer,
-  BarChart, LineChart, PieChart, HeatmapChart, ScatterChart,
-  GridComponent, TooltipComponent, LegendComponent,
-  TitleComponent, VisualMapComponent, CalendarComponent,
-])
+registerECharts()
 
 const sessionStore = useSessionStore()
 const analysisStore = useAnalysisStore()
@@ -46,7 +34,19 @@ const themeStore = useThemeStore()
 const message = useMessage()
 
 const messages = ref<DbMessage[]>([])
-const isLoading = ref(false)
+
+const timeRangeType = ref<'all' | '7d' | '30d' | '90d' | 'custom'>('all')
+const customRange = ref<[number, number] | null>(null)
+
+function handleTimeRangeChange() {
+  const filter: TimeRangeFilter = {
+    type: timeRangeType.value,
+    customStart: customRange.value?.[0],
+    customEnd: customRange.value?.[1],
+  }
+  analysisStore.setTimeRange(filter)
+  messages.value = analysisStore.messages
+}
 
 // 关键词追踪
 const keywordInput = ref('')
@@ -106,14 +106,11 @@ async function loadData() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
 
-  isLoading.value = true
   try {
     await analysisStore.ensureAnalysis(sessionId)
     messages.value = analysisStore.messages
   } catch (err) {
     message.error('加载数据失败')
-  } finally {
-    isLoading.value = false
   }
 }
 
@@ -362,15 +359,7 @@ const timeShiftOption = computed(() => {
 const emotionDistOption = computed(() => {
   if (!emotionDistData.value) return {}
 
-  const emotions = [
-    { key: 'positive', name: '😊 正面', color: '#18a058' },
-    { key: 'negative', name: '😟 负面', color: '#d03050' },
-    { key: 'neutral', name: '😐 中性', color: '#909399' },
-    { key: 'angry', name: '😡 愤怒', color: '#f56c6c' },
-    { key: 'sad', name: '😢 悲伤', color: '#909399' },
-    { key: 'affectionate', name: '💕 亲昵', color: '#e6a23c' },
-    { key: 'indifferent', name: '🙄 敷衍', color: '#c0c4cc' },
-  ]
+  const emotions = Object.values(EMOTION_META)
 
   return buildChartOption(themeStore.isDark, {
     tooltip: { trigger: 'axis' },
@@ -378,7 +367,7 @@ const emotionDistOption = computed(() => {
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: {
       type: 'category',
-      data: emotions.map(e => e.name),
+      data: emotions.map(e => `${e.emoji} ${e.name}`),
     },
     yAxis: { type: 'value', name: '消息数' },
     series: [
@@ -386,13 +375,13 @@ const emotionDistOption = computed(() => {
         name: '我',
         type: 'bar',
         data: emotions.map(e => emotionDistData.value?.self[e.key] || 0),
-        itemStyle: { color: '#18a058' },
+        itemStyle: { color: ROLE_COLORS.self },
       },
       {
         name: '对方',
         type: 'bar',
         data: emotions.map(e => emotionDistData.value?.other[e.key] || 0),
-        itemStyle: { color: '#2080f0' },
+        itemStyle: { color: ROLE_COLORS.other },
       },
     ],
   })
@@ -439,6 +428,70 @@ const comparisonData = computed(() => {
     otherIndifferentRatio: (otherEmotions['indifferent'] || 0) / otherTotalEmotion,
   }
 })
+
+const topicData = computed(() => analysisStore.topicAnalysis)
+const rhythmData = computed(() => analysisStore.engagementRhythm)
+const mediaData = computed(() => analysisStore.mediaAnalysis)
+const annualData = computed(() => analysisStore.annualReport)
+
+const topicInitiatorOption = computed(() => {
+  const data = topicData.value
+  if (!data || data.topics.length === 0) return {}
+  return buildChartOption(themeStore.isDark, {
+    tooltip: { trigger: 'item' },
+    legend: { data: ['我发起', '对方发起'] },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      avoidLabelOverlap: false,
+      itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+      label: { show: true, formatter: '{b}: {c} ({d}%)' },
+      data: [
+        { value: data.selfInitiated, name: '我发起', itemStyle: { color: '#18a058' } },
+        { value: data.otherInitiated, name: '对方发起', itemStyle: { color: '#2080f0' } },
+      ],
+    }],
+  })
+})
+
+const mediaDistOption = computed(() => {
+  const data = mediaData.value
+  if (!data || data.typeStats.length <= 1) return {}
+  const stats = data.typeStats.filter(s => s.type !== 'text')
+  if (stats.length === 0) return {}
+  return buildChartOption(themeStore.isDark, {
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    legend: { data: ['我', '对方'] },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: stats.map(s => s.label) },
+    yAxis: { type: 'value', name: '数量' },
+    series: [
+      { name: '我', type: 'bar', data: stats.map(s => s.selfCount), itemStyle: { color: '#18a058' } },
+      { name: '对方', type: 'bar', data: stats.map(s => s.otherCount), itemStyle: { color: '#2080f0' } },
+    ],
+  })
+})
+
+const annualEmotionOption = computed(() => {
+  const data = annualData.value
+  if (!data) return {}
+  const summary = data.emotionSummary
+  return buildChartOption(themeStore.isDark, {
+    tooltip: { trigger: 'item' },
+    legend: { data: ['我-正面', '我-负面', '对方-正面', '对方-负面'] },
+    series: [{
+      type: 'pie',
+      radius: ['30%', '65%'],
+      label: { show: true, formatter: '{b}: {c}' },
+      data: [
+        { value: summary.selfPositive, name: '我-正面', itemStyle: { color: '#18a058' } },
+        { value: summary.selfNegative, name: '我-负面', itemStyle: { color: '#d03050' } },
+        { value: summary.otherPositive, name: '对方-正面', itemStyle: { color: '#2080f0' } },
+        { value: summary.otherNegative, name: '对方-负面', itemStyle: { color: '#f56c6c' } },
+      ],
+    }],
+  })
+})
 </script>
 
 <template>
@@ -446,6 +499,23 @@ const comparisonData = computed(() => {
     <template v-if="hasData">
       <div class="analysis-header">
         <h2>深度分析</h2>
+        <div class="time-filter">
+          <n-radio-group v-model:value="timeRangeType" size="small" @update:value="handleTimeRangeChange">
+            <n-radio-button value="all">全部</n-radio-button>
+            <n-radio-button value="7d">近7天</n-radio-button>
+            <n-radio-button value="30d">近30天</n-radio-button>
+            <n-radio-button value="90d">近90天</n-radio-button>
+            <n-radio-button value="custom">自定义</n-radio-button>
+          </n-radio-group>
+          <n-date-picker
+            v-if="timeRangeType === 'custom'"
+            v-model:value="customRange"
+            type="daterange"
+            size="small"
+            clearable
+            @update:value="handleTimeRangeChange"
+          />
+        </div>
       </div>
 
       <!-- 关键词追踪 -->
@@ -773,6 +843,167 @@ const comparisonData = computed(() => {
           </n-grid-item>
         </n-grid>
       </n-card>
+
+      <!-- 话题分析 -->
+      <n-card v-if="topicData && topicData.topics.length > 0" title="话题分析" class="chart-card">
+        <n-grid :cols="2" :x-gap="16">
+          <n-grid-item>
+            <v-chart class="chart" :option="topicInitiatorOption" autoresize />
+          </n-grid-item>
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">话题统计</div>
+              <n-space vertical size="small" style="margin-top: 12px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">话题总数</span>
+                  <span class="dynamics-value">{{ topicData.topics.length }}</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">我发起</span>
+                  <span class="dynamics-value" style="color: #18a058">{{ topicData.selfInitiated }} 次</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">对方发起</span>
+                  <span class="dynamics-value" style="color: #2080f0">{{ topicData.otherInitiated }} 次</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">平均话题长度</span>
+                  <span class="dynamics-value">{{ topicData.avgTopicLength.toFixed(1) }} 条</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">话题切换次数</span>
+                  <span class="dynamics-value">{{ topicData.topicSwitchCount }}</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+        </n-grid>
+      </n-card>
+
+      <!-- 互动节奏 -->
+      <n-card v-if="rhythmData" title="互动节奏" class="chart-card">
+        <n-grid :cols="4" :x-gap="16">
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">早安</div>
+              <n-space vertical size="small" style="margin-top: 8px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">我</span>
+                  <span class="dynamics-value" style="color: #18a058">{{ rhythmData.selfGoodMorningCount }} 天</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">对方</span>
+                  <span class="dynamics-value" style="color: #2080f0">{{ rhythmData.otherGoodMorningCount }} 天</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">晚安</div>
+              <n-space vertical size="small" style="margin-top: 8px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">我</span>
+                  <span class="dynamics-value" style="color: #18a058">{{ rhythmData.selfGoodNightCount }} 天</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">对方</span>
+                  <span class="dynamics-value" style="color: #2080f0">{{ rhythmData.otherGoodNightCount }} 天</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">先开口</div>
+              <n-space vertical size="small" style="margin-top: 8px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">我</span>
+                  <span class="dynamics-value" style="color: #18a058">{{ rhythmData.selfFirstMessageDays }} 天</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">对方</span>
+                  <span class="dynamics-value" style="color: #2080f0">{{ rhythmData.otherFirstMessageDays }} 天</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">最后说</div>
+              <n-space vertical size="small" style="margin-top: 8px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">我</span>
+                  <span class="dynamics-value" style="color: #18a058">{{ rhythmData.selfLastMessageDays }} 天</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">对方</span>
+                  <span class="dynamics-value" style="color: #2080f0">{{ rhythmData.otherLastMessageDays }} 天</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+        </n-grid>
+      </n-card>
+
+      <!-- 媒体内容统计 -->
+      <n-card v-if="mediaData && mediaData.typeStats.length > 1" title="媒体内容统计" class="chart-card">
+        <v-chart class="chart" :option="mediaDistOption" autoresize />
+        <n-space style="margin-top: 12px; justify-content: center">
+          <n-tag size="small" type="info">
+            文本: {{ mediaData.totalTextCount }} 条
+          </n-tag>
+          <n-tag size="small" type="success">
+            媒体: {{ mediaData.totalMediaCount }} 条
+          </n-tag>
+          <n-tag size="small">
+            我媒体占比: {{ (mediaData.selfMediaRatio * 100).toFixed(1) }}%
+          </n-tag>
+          <n-tag size="small">
+            对方媒体占比: {{ (mediaData.otherMediaRatio * 100).toFixed(1) }}%
+          </n-tag>
+        </n-space>
+      </n-card>
+
+      <!-- 年度总结 -->
+      <n-card v-if="annualData" title="年度总结" class="chart-card">
+        <n-grid :cols="2" :x-gap="16">
+          <n-grid-item>
+            <v-chart class="chart" :option="annualEmotionOption" autoresize />
+          </n-grid-item>
+          <n-grid-item>
+            <div class="dynamics-section">
+              <div class="dynamics-title">{{ annualData.year }} 年数据概览</div>
+              <n-space vertical size="small" style="margin-top: 12px">
+                <div class="dynamics-row">
+                  <span class="dynamics-label">总消息</span>
+                  <span class="dynamics-value">{{ annualData.totalMessages }} 条</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">活跃天数</span>
+                  <span class="dynamics-value">{{ annualData.activeDays }} / {{ annualData.totalDays }} 天</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">最活跃日</span>
+                  <span class="dynamics-value">{{ annualData.mostActiveDay.date }} ({{ annualData.mostActiveDay.count }}条)</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">最活跃时段</span>
+                  <span class="dynamics-value">{{ annualData.mostActiveHour }}时</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">最长连续聊天</span>
+                  <span class="dynamics-value">{{ annualData.longestStreak }} 天</span>
+                </div>
+                <div class="dynamics-row">
+                  <span class="dynamics-label">日均消息</span>
+                  <span class="dynamics-value">{{ annualData.avgDailyMessages.toFixed(1) }} 条</span>
+                </div>
+              </n-space>
+            </div>
+          </n-grid-item>
+        </n-grid>
+      </n-card>
     </template>
 
     <n-empty v-else description="暂无数据，请先导入聊天记录">
@@ -800,6 +1031,14 @@ const comparisonData = computed(() => {
   margin: 0;
   font-size: 24px;
   color: var(--text-color);
+}
+
+.time-filter {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .chart-row {

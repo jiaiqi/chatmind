@@ -1,6 +1,26 @@
 export interface AiMessage {
-  role: 'system' | 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
+  tool_call_id?: string
+  tool_calls?: AiToolCall[]
+}
+
+export interface AiToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+export interface AiToolDefinition {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, any>
+  }
 }
 
 export interface AiRequestConfig {
@@ -9,11 +29,18 @@ export interface AiRequestConfig {
   model: string
   extraHeaders?: Record<string, string>
   provider?: string
+  supportsFunctionCalling?: boolean
 }
 
 export interface AiClientOptions {
   timeout?: number
   retries?: number
+}
+
+export interface StreamEvent {
+  type: 'content' | 'tool_call' | 'done'
+  content?: string
+  toolCall?: AiToolCall
 }
 
 export class AiClient {
@@ -28,8 +55,12 @@ export class AiClient {
     this.retries = options.retries ?? 1
   }
 
-  async *chatStream(messages: AiMessage[]): AsyncGenerator<string> {
-    const body = this.buildRequestBody(messages)
+  get supportsFunctionCalling(): boolean {
+    return this.config.supportsFunctionCalling ?? false
+  }
+
+  async *chatStream(messages: AiMessage[], tools?: AiToolDefinition[]): AsyncGenerator<StreamEvent> {
+    const body = this.buildRequestBody(messages, tools)
     const headers = this.buildHeaders()
 
     const response = await this.fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
@@ -43,6 +74,8 @@ export class AiClient {
 
     const decoder = new TextDecoder()
     let buffer = ''
+
+    const toolCallAccumulators = new Map<number, { id: string; name: string; arguments: string }>()
 
     while (true) {
       const { done, value } = await reader.read()
@@ -59,13 +92,54 @@ export class AiClient {
 
         try {
           const data = JSON.parse(trimmed.slice(6))
-          const content = data.choices?.[0]?.delta?.content
-          if (content) yield content
+          const choice = data.choices?.[0]
+          if (!choice) continue
+
+          const delta = choice.delta
+          if (delta?.content) {
+            yield { type: 'content', content: delta.content }
+          }
+
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0
+              if (!toolCallAccumulators.has(idx)) {
+                toolCallAccumulators.set(idx, {
+                  id: tc.id || '',
+                  name: tc.function?.name || '',
+                  arguments: '',
+                })
+              }
+              const acc = toolCallAccumulators.get(idx)!
+              if (tc.id) acc.id = tc.id
+              if (tc.function?.name) acc.name = tc.function.name
+              if (tc.function?.arguments) acc.arguments += tc.function.arguments
+            }
+          }
+
+          if (choice.finish_reason === 'tool_calls') {
+            for (const [, acc] of toolCallAccumulators) {
+              yield {
+                type: 'tool_call',
+                toolCall: {
+                  id: acc.id,
+                  type: 'function',
+                  function: {
+                    name: acc.name,
+                    arguments: acc.arguments,
+                  },
+                },
+              }
+            }
+            toolCallAccumulators.clear()
+          }
         } catch {
           // ignore parse error
         }
       }
     }
+
+    yield { type: 'done' }
   }
 
   private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
@@ -119,10 +193,12 @@ export class AiClient {
     return new Promise(resolve => setTimeout(resolve, ms))
   }
 
-  async chat(messages: AiMessage[]): Promise<string> {
+  async chat(messages: AiMessage[], tools?: AiToolDefinition[]): Promise<string> {
     let result = ''
-    for await (const chunk of this.chatStream(messages)) {
-      result += chunk
+    for await (const event of this.chatStream(messages, tools)) {
+      if (event.type === 'content' && event.content) {
+        result += event.content
+      }
     }
     return result
   }
@@ -148,7 +224,7 @@ export class AiClient {
     return headers
   }
 
-  private buildRequestBody(messages: AiMessage[]) {
+  private buildRequestBody(messages: AiMessage[], tools?: AiToolDefinition[]) {
     const body: Record<string, any> = {
       model: this.config.model,
       messages,
@@ -156,7 +232,9 @@ export class AiClient {
       temperature: 0.7,
     }
 
-    // MiniMax、百炼、智谱均完全兼容 OpenAI 标准格式，无需特殊转换
+    if (this.supportsFunctionCalling && tools && tools.length > 0) {
+      body.tools = tools
+    }
 
     return body
   }

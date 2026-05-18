@@ -144,6 +144,7 @@ export const useModelConfigStore = defineStore('model-config', () => {
         ? (setting.customModelId || 'custom-model')
         : setting.modelId,
       extraHeaders: provider.extraHeaders,
+      supportsFunctionCalling: provider.supportsFunctionCalling ?? false,
     }
   }
 

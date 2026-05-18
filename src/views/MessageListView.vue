@@ -3,12 +3,14 @@ import { ref, computed, watch, onMounted } from 'vue'
 import {
   NCard, NList, NListItem, NThing, NPagination,
   NTag, NEmpty, NSpace, NSelect, useMessage, NPopover,
-  NDropdown, NButton, NIcon, NModal,
+  NDropdown, NButton, NIcon, NModal, NInput, NInputGroup,
 } from 'naive-ui'
-import { EllipsisHorizontalOutline } from '@vicons/ionicons5'
+import { EllipsisHorizontalOutline, SearchOutline } from '@vicons/ionicons5'
 import { useSessionStore } from '../stores/session'
 import { db } from '../db/schema'
 import { formatDateTime } from '../utils/date'
+import { EMOTION_COLORS, EMOTION_LABELS } from '../constants/emotion'
+import { safeHighlight, escapeHtml } from '../utils/html'
 import type { DbMessage } from '../db/schema'
 import type { EmotionLabel } from '../types/message'
 
@@ -21,38 +23,14 @@ const pageSize = ref(50)
 const totalCount = ref(0)
 const filterEmotion = ref<string | null>(null)
 const filterSender = ref<string | null>(null)
+const searchKeyword = ref('')
+const searchDebounceTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 const pageCount = computed(() => Math.ceil(totalCount.value / pageSize.value))
 
-const emotionColors: Record<EmotionLabel, string> = {
-  positive: '#18a058',
-  negative: '#d03050',
-  neutral: '#909399',
-  angry: '#f56c6c',
-  sad: '#909399',
-  affectionate: '#e6a23c',
-  indifferent: '#c0c4cc',
-}
-
-const emotionLabels: Record<string, string> = {
-  positive: '😊 正面',
-  negative: '😟 负面',
-  neutral: '😐 中性',
-  angry: '😡 愤怒',
-  sad: '😢 悲伤',
-  affectionate: '💕 亲昵',
-  indifferent: '🙄 敷衍',
-}
-
-const emotionFullLabels: Record<string, string> = {
-  positive: '😊 正面',
-  negative: '😟 负面',
-  neutral: '😐 中性',
-  angry: '😡 愤怒',
-  sad: '😢 悲伤',
-  affectionate: '💕 亲昵',
-  indifferent: '🙄 敷衍',
-}
+const emotionColors = EMOTION_COLORS
+const emotionLabels = EMOTION_LABELS
+const emotionFullLabels = EMOTION_LABELS
 
 const allEmotions: EmotionLabel[] = ['positive', 'negative', 'neutral', 'angry', 'sad', 'affectionate', 'indifferent']
 const correctingMsgId = ref<string | null>(null)
@@ -77,8 +55,6 @@ async function loadMessages() {
   if (!sessionId) return
 
   try {
-    totalCount.value = await sessionStore.getMessageCount(sessionId)
-
     let query = db.messages
       .where('sessionId')
       .equals(sessionId)
@@ -92,18 +68,38 @@ async function loadMessages() {
       query = query.and(m => m.isSelf === isSelf)
     }
 
+    if (searchKeyword.value) {
+      const keyword = searchKeyword.value.toLowerCase()
+      query = query.and(m => m.content.toLowerCase().includes(keyword))
+    }
+
+    const allFiltered = await query.sortBy('timestamp')
+    totalCount.value = allFiltered.length
+
     const offset = (currentPage.value - 1) * pageSize.value
-    messages.value = await query
-      .offset(offset)
-      .limit(pageSize.value)
-      .sortBy('timestamp')
+    messages.value = allFiltered.slice(offset, offset + pageSize.value)
   } catch (err) {
     message.error('加载消息失败')
   }
 }
 
+function handleSearchInput() {
+  if (searchDebounceTimer.value) clearTimeout(searchDebounceTimer.value)
+  searchDebounceTimer.value = setTimeout(() => {
+    currentPage.value = 1
+    loadMessages()
+  }, 300)
+}
+
+function clearSearch() {
+  searchKeyword.value = ''
+  currentPage.value = 1
+  loadMessages()
+}
+
 watch(() => sessionStore.currentSessionId, () => {
   currentPage.value = 1
+  searchKeyword.value = ''
   loadMessages()
 })
 watch([currentPage, filterEmotion, filterSender], loadMessages)
@@ -198,6 +194,20 @@ function handleIdentitySelect(key: string, msg: DbMessage) {
     <n-card title="聊天记录">
       <template #header-extra>
         <n-space>
+          <n-input-group>
+            <n-input
+              v-model:value="searchKeyword"
+              placeholder="搜索消息..."
+              clearable
+              style="width: 200px"
+              @input="handleSearchInput"
+              @clear="clearSearch"
+            >
+              <template #prefix>
+                <n-icon :component="SearchOutline" />
+              </template>
+            </n-input>
+          </n-input-group>
           <n-select
             v-model:value="filterSender"
             :options="senderOptions"
@@ -214,6 +224,10 @@ function handleIdentitySelect(key: string, msg: DbMessage) {
           />
         </n-space>
       </template>
+
+      <div v-if="searchKeyword && totalCount > 0" class="search-result-hint">
+        找到 {{ totalCount }} 条包含「{{ searchKeyword }}」的消息
+      </div>
 
       <n-list v-if="messages.length > 0">
         <n-list-item v-for="msg in messages" :key="msg.id">
@@ -273,7 +287,10 @@ function handleIdentitySelect(key: string, msg: DbMessage) {
               </n-space>
             </template>
             <template #description>
-              <div class="msg-content">{{ msg.content }}</div>
+              <div
+                class="msg-content"
+                v-html="searchKeyword ? safeHighlight(msg.content, searchKeyword) : escapeHtml(msg.content)"
+              ></div>
             </template>
           </n-thing>
         </n-list-item>
@@ -328,6 +345,21 @@ function handleIdentitySelect(key: string, msg: DbMessage) {
   word-break: break-word;
   line-height: 1.6;
   padding: 8px 0;
+}
+
+.msg-content :deep(mark) {
+  background: #fff3cd;
+  color: #856404;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+.search-result-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  padding: 4px 0;
 }
 
 .pagination {

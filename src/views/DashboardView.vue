@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, watch, onMounted } from 'vue'
+import { computed, watch, onMounted, ref } from 'vue'
 import {
   NCard, NGrid, NGridItem, NStatistic, NDivider,
   NButton, NEmpty, NProgress, NAlert, NSpace, NTag, useMessage,
+  NRadioGroup, NRadioButton, NDatePicker,
 } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -13,7 +14,7 @@ import {
   TitleComponent, ToolboxComponent,
 } from 'echarts/components'
 import { useSessionStore } from '../stores/session'
-import { useAnalysisStore } from '../stores/analysis'
+import { useAnalysisStore, type TimeRangeFilter } from '../stores/analysis'
 import { useThemeStore } from '../stores/theme'
 import { buildChartOption } from '../utils/chart-theme'
 import { formatDuration } from '../analyzers/statistics'
@@ -31,6 +32,9 @@ const analysisStore = useAnalysisStore()
 const themeStore = useThemeStore()
 const message = useMessage()
 
+const timeRangeType = ref<'all' | '7d' | '30d' | '90d' | 'custom'>('all')
+const customRange = ref<[number, number] | null>(null)
+
 const hasData = computed(() => sessionStore.currentSession !== null)
 
 const sessionName = computed(() => {
@@ -43,6 +47,15 @@ const timeRangeText = computed(() => {
   const [start, end] = session.timeRange
   return `${formatDate(start)} 至 ${formatDate(end)}`
 })
+
+function handleTimeRangeChange() {
+  const filter: TimeRangeFilter = {
+    type: timeRangeType.value,
+    customStart: customRange.value?.[0],
+    customEnd: customRange.value?.[1],
+  }
+  analysisStore.setTimeRange(filter)
+}
 
 async function loadData() {
   const sessionId = sessionStore.currentSessionId
@@ -176,6 +189,23 @@ const ratioChartOption = computed(() => {
       <div class="dashboard-header">
         <h2>{{ sessionName }}</h2>
         <p class="time-range">{{ timeRangeText }}</p>
+        <div class="time-filter">
+          <n-radio-group v-model:value="timeRangeType" size="small" @update:value="handleTimeRangeChange">
+            <n-radio-button value="all">全部</n-radio-button>
+            <n-radio-button value="7d">近7天</n-radio-button>
+            <n-radio-button value="30d">近30天</n-radio-button>
+            <n-radio-button value="90d">近90天</n-radio-button>
+            <n-radio-button value="custom">自定义</n-radio-button>
+          </n-radio-group>
+          <n-date-picker
+            v-if="timeRangeType === 'custom'"
+            v-model:value="customRange"
+            type="daterange"
+            size="small"
+            clearable
+            @update:value="handleTimeRangeChange"
+          />
+        </div>
       </div>
 
       <n-grid :cols="4" :x-gap="16" :y-gap="16" class="stats-grid">
@@ -331,6 +361,14 @@ const ratioChartOption = computed(() => {
 .time-range {
   color: var(--text-secondary);
   margin: 4px 0 0;
+}
+
+.time-filter {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .stats-grid {

@@ -1,29 +1,63 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed, h, ref } from 'vue'
 import {
   NLayout, NLayoutSider, NLayoutContent,
   NMenu, NButton, NAvatar, NDivider,
-  NIcon, NTooltip,
+  NIcon, NTooltip, NSelect, NPopconfirm, NInput,
 } from 'naive-ui'
 import {
   ChatbubblesOutline, StatsChartOutline,
   TrendingUpOutline, SparklesOutline, TrashOutline,
   AnalyticsOutline, MoonOutline, SunnyOutline,
-  DownloadOutline,
+  DownloadOutline, CreateOutline,
 } from '@vicons/ionicons5'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../../stores/session'
 import { useThemeStore } from '../../stores/theme'
+import { useAnalysisStore } from '../../stores/analysis'
 import type { MenuOption } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
 const sessionStore = useSessionStore()
 const themeStore = useThemeStore()
+const analysisStore = useAnalysisStore()
 
 const emit = defineEmits<{
   'deleteSession': [sessionId: string]
 }>()
+
+const isRenaming = ref(false)
+const renameValue = ref('')
+
+const sessionOptions = computed(() =>
+  sessionStore.sessions.map(s => ({
+    label: s.name,
+    value: s.id,
+  }))
+)
+
+function handleSessionChange(id: string) {
+  sessionStore.setCurrentSession(id)
+  analysisStore.invalidate()
+}
+
+function startRename() {
+  const session = sessionStore.currentSession
+  if (!session) return
+  renameValue.value = session.name
+  isRenaming.value = true
+}
+
+async function confirmRename() {
+  if (!renameValue.value.trim() || !sessionStore.currentSessionId) return
+  await sessionStore.renameSession(sessionStore.currentSessionId, renameValue.value.trim())
+  isRenaming.value = false
+}
+
+function cancelRename() {
+  isRenaming.value = false
+}
 
 const menuOptions = computed<MenuOption[]>(() => {
   const options: MenuOption[] = [
@@ -97,9 +131,39 @@ const currentSessionTime = computed(() => {
 
       <n-divider style="margin: 8px 0" />
 
-      <div class="session-info" v-if="sessionStore.currentSession">
-        <div class="session-name">{{ currentSessionName }}</div>
-        <div class="session-meta">{{ currentSessionTime }}</div>
+      <div class="session-info" v-if="sessionStore.sessions.length > 0">
+        <n-select
+          :value="sessionStore.currentSessionId"
+          :options="sessionOptions"
+          size="small"
+          @update:value="handleSessionChange"
+        />
+        <div v-if="isRenaming" class="rename-row">
+          <n-input
+            v-model:value="renameValue"
+            size="tiny"
+            placeholder="新名称"
+            @keyup.enter="confirmRename"
+            @keyup.escape="cancelRename"
+          />
+          <n-button size="tiny" type="primary" @click="confirmRename">确定</n-button>
+          <n-button size="tiny" @click="cancelRename">取消</n-button>
+        </div>
+        <div v-else class="session-actions">
+          <n-button text size="tiny" @click="startRename">
+            <n-icon size="14"><create-outline /></n-icon>
+            重命名
+          </n-button>
+          <n-popconfirm @positive-click="emit('deleteSession', sessionStore.currentSessionId!)">
+            <template #trigger>
+              <n-button text size="tiny" type="error">
+                <n-icon size="14"><trash-outline /></n-icon>
+                删除
+              </n-button>
+            </template>
+            确定删除此会话？所有消息将被清除。
+          </n-popconfirm>
+        </div>
       </div>
 
       <n-menu
@@ -127,20 +191,6 @@ const currentSessionTime = computed(() => {
               </n-button>
             </template>
             {{ themeStore.isDark ? '切换亮色' : '切换暗色' }}
-          </n-tooltip>
-
-          <n-tooltip placement="right">
-            <template #trigger>
-              <n-button
-                text
-                circle
-                size="small"
-                @click="emit('deleteSession', sessionStore.currentSessionId!)"
-              >
-                <n-icon><trash-outline /></n-icon>
-              </n-button>
-            </template>
-            删除当前会话
           </n-tooltip>
         </n-space>
 
@@ -179,21 +229,21 @@ const currentSessionTime = computed(() => {
 
 .session-info {
   padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.session-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.session-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
-.session-meta {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
+.rename-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
 
 .sider-footer {

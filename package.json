@@ -9,14 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@types/papaparse": "^5.5.2",
     "@vicons/ionicons5": "^0.13.0",
     "dexie": "^4.4.2",
     "echarts": "^6.0.0",
     "echarts-wordcloud": "^2.1.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
-    "jszip": "^3.10.1",
     "naive-ui": "^2.44.1",
     "papaparse": "^5.5.3",
     "pinia": "^3.0.4",

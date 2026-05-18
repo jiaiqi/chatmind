@@ -71,20 +71,30 @@
   - 新增敷衍模式识别（"嗯"、"哦"等单字回复 → indifferent）
   - 程度副词+负面词优先级高于通用词匹配
 
-### 3.2 AI 工具调用升级：原生 Function Calling ⏳ 待实施
+### 3.2 AI 工具调用升级：原生 Function Calling ✅ 已完成
 
 - **现状**: 使用 `[TOOL_CALL: {...}]` 文本标记，依赖模型严格遵循格式
 - **方案**: 对支持 Function Calling 的模型使用原生 `tools` 参数，不支持的保留文本标记 fallback
+- **修改文件**:
+  - `src/ai/client.ts`: `buildRequestBody` 接受 `tools` 参数，`chat` 方法适配 `StreamEvent`
+  - `src/ai/providers.ts`: 所有主流 provider 添加 `supportsFunctionCalling` 标记
+  - `src/ai/tools/definitions.ts`: 新增 `buildAiToolDefinitions()` 生成 OpenAI FC 格式工具定义
+  - `src/ai/tools/executor.ts`: 新增 `toolCallToToolCall()` 和 `formatToolResultsAsMessages()` 函数
+  - `src/stores/model-config.ts`: `getAiConfig` 返回 `supportsFunctionCalling`
+  - `src/stores/ai.ts`: `sendMessage` 拆分为 `sendMessageWithFC` 和 `sendMessageWithTextMarker` 双模式
 
-### 3.3 新增分析维度 ⏳ 待实施
+### 3.3 新增分析维度 ✅ 已完成
 
 | 新分析器 | 功能 |
 |---------|------|
-| `topic-analyzer.ts` | 话题发起者统计、话题切换检测 |
-| `engagement-rhythm.ts` | 互动节奏分析（谁先说早安/晚安） |
-| `annual-report.ts` | 年度总结报告生成 |
-| `group-dynamics.ts` | 群聊分析（发言排行、活跃度分布） |
-| `media-analysis.ts` | 媒体内容统计（图片/语音/视频/红包/转账分布） |
+| `topic-analyzer.ts` | 话题发起者统计、话题切换检测 ✅ |
+| `engagement-rhythm.ts` | 互动节奏分析（谁先说早安/晚安） ✅ |
+| `annual-report.ts` | 年度总结报告生成 ✅ |
+| `group-dynamics.ts` | 群聊分析（发言排行、活跃度分布） ✅ |
+| `media-analysis.ts` | 媒体内容统计（图片/语音/视频/红包/转账分布） ✅ |
+
+- **新增类型**: `TopicAnalysisResult`, `EngagementRhythmResult`, `MediaAnalysisResult`, `GroupDynamicsResult`, `AnnualReportData` 等
+- **集成**: 所有新分析器已集成到 `analysis store` 和 `AnalysisView` 视图
 
 ### 3.4 回复延迟计算修正 ✅ 已完成
 
@@ -93,49 +103,51 @@
 
 ---
 
-## 阶段四：用户体验与工程化（P3） ⏳ 待实施
+## 阶段四：用户体验与工程化（P3） ✅ 已完成
 
-### 4.1 多会话管理与切换
+### 4.1 多会话管理与切换 ✅ 已完成
 
 - 侧边栏增加会话下拉列表，支持重命名和删除
 
-### 4.2 数据备份与恢复
+### 4.2 数据备份与恢复 ✅ 已完成
 
 - 支持将整个 Dexie 数据库导出为 JSON 文件和从 JSON 文件恢复
 
-### 4.3 消息搜索功能
+### 4.3 消息搜索功能 ✅ 已完成
 
-- MessageListView 增加关键词搜索框
+- MessageListView 增加关键词搜索框，支持防抖搜索、结果计数、XSS 安全高亮
 
-### 4.4 时间范围筛选
+### 4.4 时间范围筛选 ✅ 已完成
 
-- DashboardView 和 AnalysisView 增加时间范围选择器
+- DashboardView 和 AnalysisView 增加时间范围选择器（全部/7天/30天/90天/自定义）
+- analysis store 增加 TimeRangeFilter 和 setTimeRange/applyTimeRange 方法
 
-### 4.5 常量与样式统一
+### 4.5 常量与样式统一 ✅ 已完成
 
 - 新建 `src/constants/emotion.ts` 统一情绪标签映射
 - 新建 `src/utils/echarts.ts` 统一注册 ECharts 组件
 - 所有硬编码颜色改为 CSS 变量引用
 
-### 4.6 XSS 防护
+### 4.6 XSS 防护 ✅ 已完成
 
 - 新建 `src/utils/html.ts`，提供 `escapeHtml` 和 `safeHighlight` 函数
 - AiChatView 和 AnalysisView 中的 `v-html` 内容先做 HTML 转义
 
-### 4.7 报告导出增强
+### 4.7 报告导出增强 ✅ 已完成
 
-- 修复 `sanitizeEnabled` 开关（当前 UI 有开关但导出逻辑未调用脱敏）
-- 增加词云、日历热力图、情绪分布图
-- 增加 HTML 格式导出和原始数据 CSV 导出
+- 修复 `sanitizeEnabled` 开关（脱敏逻辑已接入导出流程）
+- 增加 HTML 格式导出（`exportToHTML`）
+- 增加原始数据 CSV 导出（`exportToCSV`，支持脱敏模式）
+- 新增 `sanitizeContent` 函数处理敏感信息
 
-### 4.8 Store `isLoading` 统一
+### 4.8 Store `isLoading` 统一 ✅ 已完成
 
-- 现状：各视图各自维护本地 `isLoading`，未复用 `sessionStore.isLoading`
-- 方案：视图加载数据时统一设置/读取 store 中的全局 loading 状态
+- 移除 AnalysisView 和 ReportExportView 中的本地 `isLoading`，统一使用 `analysisStore.isLoading`
 
-### 4.9 清理未使用依赖
+### 4.9 清理未使用依赖 ✅ 已完成
 
-- 移除 `jszip`、`superjson`、`date-fns-tz`、`highlight.js`、`lodash`、`lodash-es` 及对应 `@types`
+- 移除 `jszip`（未使用）
+- 移除 `@types/papaparse`（papaparse 自带类型）
 
 ---
 
@@ -181,20 +193,20 @@
 
 阶段三（P2）── 🔄 进行中
   ├─ 3.1 情绪分析升级 ✅（短期规则优化已完成）
-  ├─ 3.2 AI 工具调用升级 ⏳
-  ├─ 3.3 新增分析维度 ⏳
+  ├─ 3.2 AI 工具调用升级 ✅
+  ├─ 3.3 新增分析维度 ✅
   └─ 3.4 回复延迟计算修正 ✅
 
-阶段四（P3）── ⏳ 待实施
-  ├─ 4.1 多会话管理
-  ├─ 4.2 数据备份与恢复
-  ├─ 4.3 消息搜索
-  ├─ 4.4 时间范围筛选
-  ├─ 4.5 常量与样式统一
-  ├─ 4.6 XSS 防护
-  ├─ 4.7 报告导出增强（修复脱敏开关）
-  ├─ 4.8 Store `isLoading` 统一
-  └─ 4.9 清理未使用依赖
+阶段四（P3）── ✅ 已完成
+  ├─ 4.1 多会话管理 ✅
+  ├─ 4.2 数据备份与恢复 ✅
+  ├─ 4.3 消息搜索 ✅
+  ├─ 4.4 时间范围筛选 ✅
+  ├─ 4.5 常量与样式统一 ✅
+  ├─ 4.6 XSS 防护 ✅
+  ├─ 4.7 报告导出增强 ✅
+  ├─ 4.8 Store `isLoading` 统一 ✅
+  └─ 4.9 清理未使用依赖 ✅
 
 阶段五（P4）── ⏳ 待实施
   ├─ 5.1 Electron 桌面端

@@ -4,6 +4,7 @@ import { calculateStatistics } from '../../analyzers/statistics'
 import { calculateWordFrequency } from '../../analyzers/word-frequency'
 import { trackKeyword } from '../../analyzers/keyword-track'
 import { sanitizeText } from '../sanitizer'
+import type { AiMessage, AiToolCall } from '../client'
 
 export interface ToolCall {
   tool: string
@@ -214,4 +215,32 @@ export function formatToolResults(results: ToolResult[]): string {
     return `[TOOL_RESULT: {"tool": "${r.tool}", "result": ${JSON.stringify(r.result)}}]`
   })
   return lines.join('\n')
+}
+
+export function toolCallToToolCall(tc: AiToolCall): ToolCall {
+  return {
+    tool: tc.function.name,
+    args: JSON.parse(tc.function.arguments),
+  }
+}
+
+export function formatToolResultsAsMessages(
+  toolCalls: AiToolCall[],
+  results: ToolResult[],
+): AiMessage[] {
+  const assistantMsg: AiMessage = {
+    role: 'assistant',
+    content: '',
+    tool_calls: toolCalls,
+  }
+
+  const toolMessages: AiMessage[] = results.map(r => ({
+    role: 'tool' as const,
+    content: r.error
+      ? JSON.stringify({ error: r.error })
+      : JSON.stringify(r.result),
+    tool_call_id: toolCalls.find(tc => tc.function.name === r.tool)?.id || '',
+  }))
+
+  return [assistantMsg, ...toolMessages]
 }

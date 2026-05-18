@@ -22,7 +22,7 @@ import { calculateStatistics } from '../analyzers/statistics'
 import { calculateEmotionTrend } from '../analyzers/emotion'
 import { calculateRelationshipScore } from '../analyzers/relationship-score'
 import { detectDangerSignals } from '../analyzers/danger-signals'
-import { exportToImage, exportToPDF } from '../utils/export'
+import { exportToImage, exportToPDF, exportToHTML, exportToCSV, sanitizeContent } from '../utils/export'
 import { formatDate } from '../utils/date'
 import type { DbMessage } from '../db/schema'
 
@@ -46,7 +46,6 @@ const showPreview = ref(false)
 const exporting = ref(false)
 
 const messages = ref<DbMessage[]>([])
-const isLoading = ref(false)
 
 const hasData = computed(() => sessionStore.currentSession !== null)
 const sessionName = computed(() => sessionStore.currentSession?.name || '未命名会话')
@@ -64,11 +63,10 @@ async function loadData() {
   const sessionId = sessionStore.currentSessionId
   if (!sessionId) return
 
-  isLoading.value = true
   try {
     await analysisStore.ensureAnalysis(sessionId)
     const [start, end] = getTimeRange()
-    const allMsgs = analysisStore.messages
+    const allMsgs = analysisStore.allMessages
     if (timeRange.value === 'all') {
       messages.value = allMsgs
     } else {
@@ -76,14 +74,21 @@ async function loadData() {
     }
   } catch {
     message.error('加载数据失败')
-  } finally {
-    isLoading.value = false
   }
 }
 
 watch(() => sessionStore.currentSessionId, loadData)
 watch(timeRange, () => { if (showPreview.value) loadData() })
 onMounted(loadData)
+
+const displayMessages = computed(() => {
+  if (!sanitizeEnabled.value) return messages.value
+  return messages.value.map(m => ({
+    ...m,
+    content: sanitizeContent(m.content),
+    senderId: m.isSelf ? '我' : '对方',
+  }))
+})
 
 const stats = computed(() => {
   if (!messages.value.length) return null
@@ -128,12 +133,14 @@ function handleGenerate() {
   })
 }
 
+const exportFilename = computed(() => `ChatMind报告-${sessionName.value}-${formatDate(Date.now())}`)
+
 async function handleExportImage() {
   const el = document.getElementById('report-content')
   if (!el) return
   exporting.value = true
   try {
-    await exportToImage(el, `ChatMind报告-${sessionName.value}-${formatDate(Date.now())}`)
+    await exportToImage(el, exportFilename.value)
     message.success('图片导出成功')
   } catch (err: any) {
     message.error(`导出失败: ${err.message}`)
@@ -147,12 +154,33 @@ async function handleExportPDF() {
   if (!el) return
   exporting.value = true
   try {
-    await exportToPDF(el, `ChatMind报告-${sessionName.value}-${formatDate(Date.now())}`)
+    await exportToPDF(el, exportFilename.value)
     message.success('PDF 导出成功')
   } catch (err: any) {
     message.error(`导出失败: ${err.message}`)
   } finally {
     exporting.value = false
+  }
+}
+
+function handleExportHTML() {
+  const el = document.getElementById('report-content')
+  if (!el) return
+  try {
+    exportToHTML(el, exportFilename.value)
+    message.success('HTML 导出成功')
+  } catch (err: any) {
+    message.error(`导出失败: ${err.message}`)
+  }
+}
+
+function handleExportCSV() {
+  if (!messages.value.length) return
+  try {
+    exportToCSV(messages.value, exportFilename.value, sanitizeEnabled.value)
+    message.success('CSV 导出成功')
+  } catch (err: any) {
+    message.error(`导出失败: ${err.message}`)
   }
 }
 
@@ -208,12 +236,18 @@ const healthColor = computed(() => {
       </n-card>
 
       <template v-if="showPreview && stats">
-        <n-space style="margin: 16px 0; justify-content: center">
+        <n-space style="margin: 16px 0; justify-content: center; flex-wrap: wrap">
           <n-button :loading="exporting" @click="handleExportImage">
             导出为图片
           </n-button>
           <n-button :loading="exporting" type="primary" @click="handleExportPDF">
             导出为 PDF
+          </n-button>
+          <n-button @click="handleExportHTML">
+            导出为 HTML
+          </n-button>
+          <n-button @click="handleExportCSV">
+            导出为 CSV
           </n-button>
         </n-space>
 
@@ -221,9 +255,12 @@ const healthColor = computed(() => {
           <div class="report-header">
             <h1>ChatMind 关系分析报告</h1>
             <p class="report-meta">
-              分析对象: {{ sessionName }} | 时间范围: {{ formatDate(messages[0]?.timestamp || 0) }} 至 {{ formatDate(messages[messages.length - 1]?.timestamp || 0) }}
+              分析对象: {{ sanitizeEnabled ? '***' : sessionName }} | 时间范围: {{ formatDate(messages[0]?.timestamp || 0) }} 至 {{ formatDate(messages[messages.length - 1]?.timestamp || 0) }}
             </p>
             <p class="report-meta">生成时间: {{ new Date().toLocaleString('zh-CN') }}</p>
+            <p v-if="sanitizeEnabled" class="report-meta" style="color: #f0a020">
+              ⚠️ 已启用脱敏模式，敏感信息已替换
+            </p>
           </div>
 
           <div class="report-section">
@@ -300,12 +337,18 @@ const healthColor = computed(() => {
           </div>
         </div>
 
-        <n-space style="margin: 16px 0; justify-content: center">
+        <n-space style="margin: 16px 0; justify-content: center; flex-wrap: wrap">
           <n-button :loading="exporting" @click="handleExportImage">
             导出为图片
           </n-button>
           <n-button :loading="exporting" type="primary" @click="handleExportPDF">
             导出为 PDF
+          </n-button>
+          <n-button @click="handleExportHTML">
+            导出为 HTML
+          </n-button>
+          <n-button @click="handleExportCSV">
+            导出为 CSV
           </n-button>
         </n-space>
       </template>
