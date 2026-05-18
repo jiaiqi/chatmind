@@ -23,9 +23,14 @@ ChatMind 是一款本地优先的 AI 微信聊天记录分析工具。它通过�
 - **聊天时段迁移**：对比前后期的活跃时段分布，检测"从深夜畅聊到白天敷衍"的关系冷却信号
 - **并排对比视图**：并排对比双方的高频词、平均字数、回复延迟、正面情绪占比等核心指标
 - **事件标记**：时间轴自动检测情绪低谷、沉默结束、聊天高峰、争吵事件，支持用户手动添加里程碑
-- **报告导出**：支持将分析报告导出为 PDF 或图片，含时间范围选择和隐私脱敏开关
+- **报告导出**：支持将分析报告导出为 PDF / 图片 / HTML / CSV，含时间范围选择和隐私脱敏开关
 - **丰富的可视化**：情绪趋势曲线、活跃时段分布、词云、聊天日历热力图、回复延迟分布、消息长度趋势、情绪分布对比等 10+ 图表
 - **暗色模式**：完整的暗色主题适配，包括所有 ECharts 图表
+- **多会话管理**：支持创建、切换、重命名、删除多个分析会话
+- **数据备份与恢复**：一键导出/导入整个数据库为 JSON 文件
+- **消息搜索**：关键词搜索聊天记录，XSS 安全高亮显示
+- **时间范围筛选**：仪表盘和深度分析页面支持按时间范围（7天/30天/90天/自定义）筛选数据
+- **XSS 防护**：所有动态内容渲染均经过 HTML 转义处理
 
 ---
 
@@ -37,13 +42,13 @@ git clone <repo-url>
 cd chatmind
 
 # 安装依赖
-npm install
+pnpm install
 
 # 开发预览
-npm run dev
+pnpm dev
 
 # 构建
-npm run build
+pnpm build
 ```
 
 打开浏览器访问 `http://localhost:5173`，点击**"使用示例数据体验"**即可零配置试用全部功能。
@@ -58,6 +63,8 @@ npm run build
 
 **支持的导入格式**：
 - WeFlow 导出的 JSON / CSV（推荐，信息最完整）
+- ChatLab 标准格式（JSON / JSONL）
+- WeFlow HTTP API 在线获取
 - 微信自带备份的 TXT（自动识别 3 种常见格式）
 - 内置示例数据（模拟恋爱故事，无需真实数据即可体验）
 
@@ -67,15 +74,16 @@ npm run build
 
 | 层级 | 技术 |
 |------|------|
-| 前端框架 | Vue 3 + TypeScript |
-| 构建工具 | Vite |
+| 前端框架 | Vue 3 + TypeScript 6 |
+| 构建工具 | Vite 8 |
 | 路由 | Vue Router 4（hash 模式） |
 | UI 组件库 | Naive UI |
-| 状态管理 | Pinia |
-| 可视化 | ECharts + vue-echarts |
+| 状态管理 | Pinia 3 |
+| 可视化 | ECharts 6 + vue-echarts |
 | 词云 | echarts-wordcloud |
 | 数据库 | IndexedDB + Dexie.js |
 | CSV 解析 | PapaParse |
+| 报告导出 | html2canvas + jsPDF |
 
 ---
 
@@ -83,59 +91,95 @@ npm run build
 
 ```
 src/
-├── ai/                    # AI 客户端、脱敏工具
-├── analyzers/             # 分析引擎（统计、情绪、危险信号、健康度）
-├── components/            # 组件（导入、身份选择、布局、模型配置）
-├── db/                    # IndexedDB 表结构
-├── parsers/               # 导入解析器（WeFlow JSON/CSV、通用 TXT）
-├── stores/                # Pinia 状态管理
-├── types/                 # TypeScript 类型定义
-├── utils/                 # 工具函数（日期、情感词典、图表主题）
-├── views/                    # 页面视图
-│   ├── ImportView.vue        # 导入页
-│   ├── DashboardView.vue     # 分析仪表盘
-│   ├── TimelineView.vue      # 情绪时间轴
-│   ├── AnalysisView.vue      # 深度分析
-│   ├── MessageListView.vue   # 聊天记录列表
-│   ├── AiChatView.vue        # AI 分析师
-│   └── ReportExportView.vue  # 报告导出
+├── ai/                    # AI 客户端、脱敏工具、Function Calling
+│   ├── client.ts          # AI HTTP 客户端（SSE 流式、重试机制）
+│   ├── ollama.ts          # Ollama 本地模型检测
+│   ├── providers.ts       # 10 个 Provider 预设配置
+│   ├── sanitizer.ts       # 隐私脱敏工具
+│   └── tools/             # AI 工具调用
+│       ├── definitions.ts # 4 个工具定义
+│       └── executor.ts    # 工具执行器（FC + 文本标记双模式）
+├── analyzers/             # 分析引擎（15 个分析器）
+│   ├── statistics.ts      # 基础统计
+│   ├── emotion.ts         # 情绪趋势
+│   ├── emotion-dynamics.ts# 情绪互动模式
+│   ├── danger-signals.ts  # 危险信号检测
+│   ├── relationship-score.ts  # 关系健康度评分
+│   ├── relationship-stage.ts  # 关系阶段判定
+│   ├── topic-analyzer.ts  # 话题切分
+│   ├── engagement-rhythm.ts   # 互动节奏
+│   ├── media-analysis.ts  # 媒体内容统计
+│   ├── group-dynamics.ts  # 群聊动态
+│   ├── keyword-track.ts   # 关键词追踪
+│   ├── word-frequency.ts  # 词频统计
+│   ├── time-shift.ts      # 聊天时段迁移
+│   ├── event-markers.ts   # 事件自动检测
+│   └── annual-report.ts   # 年度报告生成
+├── components/            # 组件
+│   ├── AppLayout/         # 侧边栏布局
+│   ├── ChatImport/        # 导入组件
+│   ├── IdentitySelector/  # 身份选择弹窗
+│   └── ModelConfig/       # 模型配置弹窗
+├── constants/             # 常量定义
+│   └── emotion.ts         # 情绪标签/颜色/Emoji 统一映射
+├── db/                    # 数据库
+│   └── schema.ts          # IndexedDB 表结构（v2）
+├── parsers/               # 导入解析器
+│   ├── index.ts           # 解析器路由
+│   ├── chatlab-json.ts    # ChatLab JSON/JSONL
+│   ├── weflow-api.ts      # WeFlow HTTP API
+│   ├── weflow-json.ts     # WeFlow JSON
+│   ├── weflow-csv.ts      # WeFlow CSV
+│   └── generic-txt.ts     # 通用 TXT
+├── router/                # 路由
+│   └── index.ts           # Vue Router 配置
+├── stores/                # Pinia Stores（7 个）
+│   ├── ai.ts              # AI 对话状态
+│   ├── analysis.ts        # 分析结果缓存 + 时间范围过滤
+│   ├── identity.ts        # 身份识别状态
+│   ├── import.ts          # 导入状态
+│   ├── model-config.ts    # 多模型配置
+│   ├── session.ts         # 会话/消息数据
+│   └── theme.ts           # 主题状态
+├── types/                 # TypeScript 类型
+│   ├── analysis.ts
+│   ├── identity.ts
+│   └── message.ts
+├── utils/                 # 工具函数
+│   ├── date.ts            # 日期格式化
+│   ├── html.ts            # XSS 防护（escapeHtml/safeHighlight）
+│   ├── chart-theme.ts     # ECharts 主题配置
+│   ├── echarts.ts         # ECharts 组件注册
+│   ├── emotion-dict.ts    # 情感词典
+│   ├── backup.ts          # 数据备份导出/导入
+│   ├── export.ts          # 报告导出（图片/PDF/HTML/CSV）
+│   └── demo-data.ts       # 示例数据生成
+├── views/                 # 页面视图
+│   ├── ImportView.vue     # 导入页
+│   ├── DashboardView.vue  # 分析仪表盘
+│   ├── TimelineView.vue   # 情绪时间轴
+│   ├── AnalysisView.vue   # 深度分析
+│   ├── MessageListView.vue# 聊天记录列表
+│   ├── AiChatView.vue     # AI 分析师
+│   └── ReportExportView.vue # 报告导出
 ├── App.vue
 └── main.ts
 ```
 
 ---
 
-## 已实现能力
+## 开发计划
 
-### v0.2.0 已交付
-- 数据导入（WeFlow JSON/CSV、通用 TXT、示例数据）+ 身份识别系统
-- 规则引擎情绪分析（7 种标签）+ 情绪修正 + 情绪趋势可视化
-- 统计分析与深度可视化（词云、日历、延迟、长度、情绪分布、时段迁移）
-- AI 分析师（多模型、流式输出、Function Calling、回答可溯源）
-- 关系健康度评分 + 危险信号检测 + 关系阶段判定
-- 关键词追踪 + 并排对比视图 + 情绪互动模式分析
-- 事件标记（自动检测 + 手动里程碑）
-- 报告导出（PDF / 图片）
-- 暗色模式 + Ollama 本地模型支持
+详见 [PLAN.md](./PLAN.md)，当前进度：
 
-### 下一步方向
-
-**近期（Bug 修复）**
-- [ ] 修复报告导出脱敏开关未生效（UI 有开关但导出逻辑未调用脱敏）
-- [ ] 清理未使用的依赖（jszip、superjson、date-fns-tz、highlight.js、lodash 等）
-
-**体验优化**
-- [ ] 更多示例数据（职场关系、亲情、友情场景）
-- [ ] 消息列表虚拟滚动（大数据量性能优化）
-- [ ] 参与者详情展示（利用已存储的 firstSeen / lastSeen / messageCount）
-
-**工程化**
-- [ ] 单元测试覆盖（Vitest，parsers + analyzers）
-- [ ] ECharts 按需加载 / 代码分割（减小生产包体积）
-
-**长期愿景**
-- [ ] Electron 桌面端（对接 WeFlow HTTP API 直连）
-- [ ] 群聊分析模式（多人身份识别、群体情绪趋势）
+- ✅ 阶段一：紧急 Bug 修复（P0）
+- ✅ 阶段二：架构升级（P1）
+- ✅ 阶段三：分析引擎增强（P2）
+- ✅ 阶段四：用户体验与工程化（P3）
+- ⏳ 阶段五：代码质量与性能优化（P4）
+- ⏳ 阶段六：工程化与测试（P5）
+- ⏳ 阶段七：功能增强（P6）
+- ⏳ 阶段八：长期演进（P7）
 
 ---
 
@@ -144,7 +188,8 @@ src/
 ChatMind 坚持本地优先原则：
 - 所有聊天记录保存在你的浏览器中，不上传任何服务器
 - 调用云端 AI 时，仅发送统计数据和脱敏后的样本（可关闭）
-- 未来支持 Ollama 本地模型，实现完全离线分析
+- 支持 Ollama 本地模型，实现完全离线分析
+- 报告导出支持隐私脱敏模式，自动替换敏感信息
 
 ---
 
